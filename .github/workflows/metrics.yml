@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: '0 0 * * 1' # 매주 월요일 자동 리포트
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   calculate-dora:
     runs-on: ubuntu-latest
