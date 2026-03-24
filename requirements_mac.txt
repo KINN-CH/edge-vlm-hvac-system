@@ -1,0 +1,38 @@
+# ─── Apple Silicon (M1/M2/M3/M4/M5) Mac 설치 가이드 ────────────────────────────
+#
+# 1. Python 환경 생성 (3.10 권장)
+#    $ conda create -n hvac-vlm python=3.10
+#    $ conda activate hvac-vlm
+#
+#    또는 venv:
+#    $ python3 -m venv .venv
+#    $ source .venv/bin/activate
+#
+# 2. PyTorch (MPS 지원 — pip 기본 패키지에 포함)
+#    $ pip install torch torchvision
+#
+# 3. 나머지 패키지
+#    $ pip install -r requirements_mac.txt
+#
+# ────────────────────────────────────────────────────────────────────────────────
+
+transformers>=4.40.0
+qwen-vl-utils
+accelerate
+opencv-python
+pillow
+pandas
+requests
+
+# ── 실행 예시 ─────────────────────────────────────────────────────────────────
+#
+# 기본 (30초 간격, MPS 자동 감지):
+#    python main.py
+#
+# M5 Mac 권장 (MPS 가속 덕분에 10~15초 간격 가능):
+#    python main.py --interval 10
+#
+# ── MPS 동작 확인 ─────────────────────────────────────────────────────────────
+#
+#    python -c "import torch; print(torch.backends.mps.is_available())"
+#    → True 이면 MPS 사용 중

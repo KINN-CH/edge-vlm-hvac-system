@@ -1,6 +1,7 @@
 import torch
 import json
 import re
+import platform
 import cv2
 from PIL import Image
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
@@ -10,7 +11,7 @@ from qwen_vl_utils import process_vision_info
 class VLMProcessor:
     """
     [Vision Language Model 처리기]
-    모델: Qwen2-VL-2B-Instruct (CPU, Windows 최적화)
+    모델: Qwen2-VL-2B-Instruct (MPS/CPU 자동 선택)
     역할: 카메라 프레임에서 PMV 입력 파라미터 및 맥락 신호를 추출합니다.
 
     ── 감지 항목 ──────────────────────────────────────────────────────────────
@@ -40,21 +41,44 @@ class VLMProcessor:
     MET_DEFAULT = 1.2   # 분류 불가 시 기립 수준
     TR_HEAT_OFFSET = 4.0  # 열원 감지 시 복사온도 보정값 (°C)
 
+    @staticmethod
+    def _select_device():
+        """
+        최적 추론 디바이스 자동 선택
+          - Apple Silicon (M1~M5): MPS + float16
+          - CUDA GPU:              CUDA + float16
+          - 그 외:                 CPU  + float32
+        """
+        if torch.backends.mps.is_available():
+            return "mps", torch.float16
+        if torch.cuda.is_available():
+            return "cuda", torch.float16
+        return "cpu", torch.float32
+
     def __init__(self):
-        self.device   = "cpu"
+        self.device, self.dtype = self._select_device()
         self.model_id = "Qwen/Qwen2-VL-2B-Instruct"
 
-        print(f"🚀 [VLM] {self.device.upper()} 모드로 초기화 중...")
+        chip = platform.processor() or platform.machine()
+        print(f"🚀 [VLM] {self.device.upper()} ({chip}) 모드로 초기화 중...")
 
         try:
-            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-                self.model_id,
-                torch_dtype=torch.float32,
-                low_cpu_mem_usage=True,
-                device_map={"": self.device}
-            )
+            if self.device == "mps":
+                # Apple Silicon: CPU에서 float16으로 로드 후 MPS 이동
+                self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                    self.model_id,
+                    torch_dtype=self.dtype,
+                    low_cpu_mem_usage=True,
+                ).to(self.device)
+            else:
+                self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                    self.model_id,
+                    torch_dtype=self.dtype,
+                    low_cpu_mem_usage=True,
+                    device_map={"": self.device},
+                )
             self.processor = AutoProcessor.from_pretrained(self.model_id)
-            print(f"✅ [VLM] {self.model_id} 로드 완료")
+            print(f"✅ [VLM] {self.model_id} 로드 완료 ({self.device}, {self.dtype})")
         except Exception as e:
             print(f"❌ [VLM] 모델 로드 실패: {e}")
             self.model     = None
@@ -106,9 +130,13 @@ class VLMProcessor:
         image_inputs, _ = process_vision_info(messages)
         inputs         = self.processor(
             text=[text], images=image_inputs, padding=True, return_tensors="pt"
-        ).to(self.device)
+        )
+        # MPS/CUDA float16: pixel_values는 float16으로 캐스팅 후 디바이스 이동
+        if self.device in ("mps", "cuda") and "pixel_values" in inputs:
+            inputs["pixel_values"] = inputs["pixel_values"].to(self.dtype)
+        inputs = inputs.to(self.device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             generated_ids = self.model.generate(**inputs, max_new_tokens=60, do_sample=False)
 
         output_text  = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
