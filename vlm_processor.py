@@ -6,78 +6,143 @@ from PIL import Image
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
 
+
 class VLMProcessor:
+    """
+    [Vision Language Model 처리기]
+    모델: Qwen2-VL-2B-Instruct (CPU, Windows 최적화)
+    역할: 카메라 프레임에서 PMV 입력 파라미터 및 맥락 신호를 추출합니다.
+
+    ── 감지 항목 ──────────────────────────────────────────────────────────────
+    PMV 입력:
+      sleeves     : 소매 길이 → clo 계산
+      outerwear   : 아우터 착용 → clo 보정
+      activity    : 활동 분류 → met 변환
+
+    맥락 신호:
+      people      : 재실 인원 수 → 재실 열부하 및 제어 세기
+      bags        : 가방 소지 → 퇴근 맥락 점수 (+25)
+      heat_source : 조리기구 등 열원 → 복사온도(tr) 보정 및 환기 우선
+    """
+
+    # PMV 입력 매핑 테이블 (ISO 7730:2005 근거)
+    CLO_BASE  = {'short': 0.5, 'long': 1.0}
+    CLO_OUTER = 0.3   # 아우터 착용 시 추가 착의량
+
+    MET_MAP = {
+        'lying':      0.8,   # 누워있음 (수면/휴식)
+        'sitting':    1.0,   # 착석 (사무 작업)
+        'standing':   1.2,   # 기립 (가벼운 활동)
+        'walking':    1.5,   # 보행
+        'cooking':    2.0,   # 조리 (서서 작업)
+        'exercising': 3.0,   # 운동 (유산소)
+    }
+    MET_DEFAULT = 1.2   # 분류 불가 시 기립 수준
+    TR_HEAT_OFFSET = 4.0  # 열원 감지 시 복사온도 보정값 (°C)
+
     def __init__(self):
-        # 1. 디바이스 설정 (현재 라이젠 노트북은 'cpu', 맥북은 'mps'로 변경 예정)
-        # self.device = "mps"  <-- 나중에 맥북 오면 이거 주석 해제하세요!
-        self.device = "cpu"    # 현재 윈도우 라이젠 노트북용
-        
-        print(f"🚀 [VLM] 현재 {self.device.upper()} 모드로 초기화 중...")
-        
+        self.device   = "cpu"
         self.model_id = "Qwen/Qwen2-VL-2B-Instruct"
-        
+
+        print(f"🚀 [VLM] {self.device.upper()} 모드로 초기화 중...")
+
         try:
-            # CPU 환경에서는 메모리 효율을 위해 float32를 사용합니다.
             self.model = Qwen2VLForConditionalGeneration.from_pretrained(
                 self.model_id,
-                torch_dtype=torch.float32 if self.device == "cpu" else torch.bfloat16,
+                torch_dtype=torch.float32,
                 low_cpu_mem_usage=True,
                 device_map={"": self.device}
             )
             self.processor = AutoProcessor.from_pretrained(self.model_id)
-            print(f"✅ [VLM] {self.device.upper()} 로드 완료")
+            print(f"✅ [VLM] {self.model_id} 로드 완료")
         except Exception as e:
-            print(f"❌ [VLM] 로드 에러: {e}")
+            print(f"❌ [VLM] 모델 로드 실패: {e}")
+            self.model     = None
+            self.processor = None
 
     def analyze_frame(self, frame):
-        # [윈도우 라이젠 최적화] CPU 부하를 줄이기 위해 해상도를 낮춥니다.
-        # 맥북으로 바꾸면 448 정도로 높여도 됩니다.
-        input_size = 160 
-        resized_frame = cv2.resize(frame, (input_size, input_size))
-        pil_img = Image.fromarray(cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB))
+        """
+        프레임 분석 → PMV 입력 파라미터 + 맥락 신호 반환
 
-        # 프롬프트: 답변이 길어질수록 CPU 연산 시간이 기하급수적으로 늘어납니다.
+        Returns:
+            dict: {
+                'clo': float,          착의량 (ISO 7730)
+                'met': float,          대사율 (ISO 7730)
+                'count': int,          재실 인원 수
+                'bags': str,           가방 소지 ('yes'|'no')
+                'heat_source': str,    열원 존재 ('yes'|'no')
+                'outerwear': str,      아우터 착용 ('yes'|'no')
+                'activity': str,       활동 분류 원문
+            }
+            None: 분석 실패 시
+        """
+        if self.model is None or self.processor is None:
+            print("⚠️ [VLM] 모델이 로드되지 않아 분석 불가.")
+            return None
+
+        # [최적화] CPU 부하 감소를 위해 160×160으로 다운스케일
+        resized = cv2.resize(frame, (160, 160))
+        pil_img = Image.fromarray(cv2.cvtColor(resized, cv2.COLOR_BGR2RGB))
+
         prompt_text = (
-            "Analyze and return ONLY JSON: {'sleeves': 'long'|'short', 'outerwear': 'yes'|'no', "
-            "'activity': 'sitting'|'walking'|'cooking', 'people': num}"
+            "Analyze this image. Return ONLY a JSON object with these exact keys: "
+            "{'sleeves': 'long'|'short', "
+            "'outerwear': 'yes'|'no', "
+            "'activity': 'lying'|'sitting'|'standing'|'walking'|'cooking'|'exercising', "
+            "'people': <integer>, "
+            "'bags': 'yes'|'no', "
+            "'heat_source': 'yes'|'no'}"
         )
 
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": pil_img},
-                    {"type": "text", "text": prompt_text}
-                ],
-            }
-        ]
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "image", "image": pil_img},
+                {"type": "text",  "text": prompt_text},
+            ],
+        }]
 
-        # 전처리 및 추론
-        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        text           = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, _ = process_vision_info(messages)
-        inputs = self.processor(text=[text], images=image_inputs, padding=True, return_tensors="pt").to(self.device)
+        inputs         = self.processor(
+            text=[text], images=image_inputs, padding=True, return_tensors="pt"
+        ).to(self.device)
 
         with torch.no_grad():
-            # CPU에서는 max_new_tokens가 적을수록 생명입니다.
-            generated_ids = self.model.generate(**inputs, max_new_tokens=40, do_sample=False)
-            
-        output_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=60, do_sample=False)
+
+        output_text  = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
         raw_response = output_text[0].split('assistant')[-1].strip()
 
+        return self._parse_response(raw_response)
+
+    def _parse_response(self, raw_response: str):
+        """VLM 응답 파싱 및 PMV 파라미터 + 맥락 신호 매핑"""
         try:
             json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                
-                # PMV 변수 매핑 (ISO 7730 근거)
-                clo = 0.5 if data.get('sleeves') == 'short' else 1.0
-                if data.get('outerwear') == 'yes': clo += 0.3
-                
-                activity_map = {'sitting': 1.0, 'walking': 1.5, 'cooking': 2.0}
-                met = activity_map.get(data.get('activity'), 1.2)
-                
-                return {"clo": clo, "met": met, "count": data.get('people', 1)}
-        except:
-            pass
-            
-        return None
+            if not json_match:
+                print(f"⚠️ [VLM] JSON 미발견. 응답: {raw_response[:80]}")
+                return None
+
+            data = json.loads(json_match.group())
+
+            clo = self.CLO_BASE.get(data.get('sleeves', 'long'), 1.0)
+            if data.get('outerwear') == 'yes':
+                clo += self.CLO_OUTER
+
+            activity = data.get('activity', 'standing')
+            met      = self.MET_MAP.get(activity, self.MET_DEFAULT)
+
+            return {
+                "clo":         round(clo, 2),
+                "met":         met,
+                "count":       max(0, int(data.get('people', 1))),
+                "bags":        data.get('bags', 'no'),
+                "heat_source": data.get('heat_source', 'no'),
+                "outerwear":   data.get('outerwear', 'no'),
+                "activity":    activity,
+            }
+
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            print(f"⚠️ [VLM] 파싱 실패: {e} | 응답: {raw_response[:80]}")
+            return None
