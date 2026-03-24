@@ -11,7 +11,18 @@ class VLMProcessor:
     """
     [Vision Language Model 처리기]
     모델: Qwen2-VL-2B-Instruct (CPU, Windows 최적화)
-    역할: 카메라 프레임에서 착의량(Clo), 대사율(Met), 인원수를 감지해 PMV 입력값으로 변환
+    역할: 카메라 프레임에서 PMV 입력 파라미터 및 맥락 신호를 추출합니다.
+
+    ── 감지 항목 ──────────────────────────────────────────────────────────────
+    PMV 입력:
+      sleeves     : 소매 길이 → clo 계산
+      outerwear   : 아우터 착용 → clo 보정
+      activity    : 활동 분류 → met 변환
+
+    맥락 신호:
+      people      : 재실 인원 수 → 재실 열부하 및 제어 세기
+      bags        : 가방 소지 → 퇴근 맥락 점수 (+25)
+      heat_source : 조리기구 등 열원 → 복사온도(tr) 보정 및 환기 우선
     """
 
     # PMV 입력 매핑 테이블 (ISO 7730:2005 근거)
@@ -19,13 +30,15 @@ class VLMProcessor:
     CLO_OUTER = 0.3   # 아우터 착용 시 추가 착의량
 
     MET_MAP = {
+        'lying':      0.8,   # 누워있음 (수면/휴식)
         'sitting':    1.0,   # 착석 (사무 작업)
         'standing':   1.2,   # 기립 (가벼운 활동)
         'walking':    1.5,   # 보행
         'cooking':    2.0,   # 조리 (서서 작업)
         'exercising': 3.0,   # 운동 (유산소)
     }
-    MET_DEFAULT = 1.2  # 분류 불가 시 기립 수준
+    MET_DEFAULT = 1.2   # 분류 불가 시 기립 수준
+    TR_HEAT_OFFSET = 4.0  # 열원 감지 시 복사온도 보정값 (°C)
 
     def __init__(self):
         self.device   = "cpu"
@@ -36,7 +49,7 @@ class VLMProcessor:
         try:
             self.model = Qwen2VLForConditionalGeneration.from_pretrained(
                 self.model_id,
-                torch_dtype=torch.float32,   # CPU에서는 float32
+                torch_dtype=torch.float32,
                 low_cpu_mem_usage=True,
                 device_map={"": self.device}
             )
@@ -49,10 +62,18 @@ class VLMProcessor:
 
     def analyze_frame(self, frame):
         """
-        프레임 분석 → PMV 입력 파라미터 반환
+        프레임 분석 → PMV 입력 파라미터 + 맥락 신호 반환
 
         Returns:
-            dict: {'clo': float, 'met': float, 'count': int}
+            dict: {
+                'clo': float,          착의량 (ISO 7730)
+                'met': float,          대사율 (ISO 7730)
+                'count': int,          재실 인원 수
+                'bags': str,           가방 소지 ('yes'|'no')
+                'heat_source': str,    열원 존재 ('yes'|'no')
+                'outerwear': str,      아우터 착용 ('yes'|'no')
+                'activity': str,       활동 분류 원문
+            }
             None: 분석 실패 시
         """
         if self.model is None or self.processor is None:
@@ -60,15 +81,17 @@ class VLMProcessor:
             return None
 
         # [최적화] CPU 부하 감소를 위해 160×160으로 다운스케일
-        resized   = cv2.resize(frame, (160, 160))
-        pil_img   = Image.fromarray(cv2.cvtColor(resized, cv2.COLOR_BGR2RGB))
+        resized = cv2.resize(frame, (160, 160))
+        pil_img = Image.fromarray(cv2.cvtColor(resized, cv2.COLOR_BGR2RGB))
 
         prompt_text = (
-            "Analyze this image. Return ONLY a JSON object with these keys: "
+            "Analyze this image. Return ONLY a JSON object with these exact keys: "
             "{'sleeves': 'long'|'short', "
             "'outerwear': 'yes'|'no', "
-            "'activity': 'sitting'|'standing'|'walking'|'cooking'|'exercising', "
-            "'people': <integer>}"
+            "'activity': 'lying'|'sitting'|'standing'|'walking'|'cooking'|'exercising', "
+            "'people': <integer>, "
+            "'bags': 'yes'|'no', "
+            "'heat_source': 'yes'|'no'}"
         )
 
         messages = [{
@@ -79,14 +102,14 @@ class VLMProcessor:
             ],
         }]
 
-        text          = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        text           = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, _ = process_vision_info(messages)
-        inputs        = self.processor(
+        inputs         = self.processor(
             text=[text], images=image_inputs, padding=True, return_tensors="pt"
         ).to(self.device)
 
         with torch.no_grad():
-            generated_ids = self.model.generate(**inputs, max_new_tokens=40, do_sample=False)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=60, do_sample=False)
 
         output_text  = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
         raw_response = output_text[0].split('assistant')[-1].strip()
@@ -94,7 +117,7 @@ class VLMProcessor:
         return self._parse_response(raw_response)
 
     def _parse_response(self, raw_response: str):
-        """VLM 응답 파싱 및 PMV 파라미터 매핑"""
+        """VLM 응답 파싱 및 PMV 파라미터 + 맥락 신호 매핑"""
         try:
             json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
             if not json_match:
@@ -107,12 +130,17 @@ class VLMProcessor:
             if data.get('outerwear') == 'yes':
                 clo += self.CLO_OUTER
 
-            met = self.MET_MAP.get(data.get('activity'), self.MET_DEFAULT)
+            activity = data.get('activity', 'standing')
+            met      = self.MET_MAP.get(activity, self.MET_DEFAULT)
 
             return {
-                "clo":   round(clo, 2),
-                "met":   met,
-                "count": max(0, int(data.get('people', 1))),
+                "clo":         round(clo, 2),
+                "met":         met,
+                "count":       max(0, int(data.get('people', 1))),
+                "bags":        data.get('bags', 'no'),
+                "heat_source": data.get('heat_source', 'no'),
+                "outerwear":   data.get('outerwear', 'no'),
+                "activity":    activity,
             }
 
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:

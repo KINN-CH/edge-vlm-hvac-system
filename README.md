@@ -37,6 +37,14 @@
 - **차별점:** VLM의 연산력을 단순 숫자 인식에 낭비하지 않고, 비정형 공간 맥락 인식에 100% 집중시킵니다.
 - **기대효과:** 온도 및 설정값은 가벼운 IoT 통신으로 수집하여 RAM 점유율을 방어하고 시스템 안정성을 극대화합니다.
 
+### ④ 시계열 상태 머신 (Context-Aware State Control)
+- **차별점:** 단순 온도 센서와 달리 **'지금 어떤 상황인가'**를 시간 흐름 속에서 추적합니다. 도착 직후(ARRIVAL) → 안정 운전(STEADY) → 퇴근 준비(PRE_DEPARTURE) → 빈 공간(EMPTY) 4단계로 제어 모드를 전환합니다.
+- **기대효과:** 출근 직후 빠른 냉·난방, 퇴근 전 선제 절전, 빈 공간 자동 OFF로 불필요한 에너지 낭비를 제거합니다.
+
+### ⑤ 에너지 절약 정량화 및 실시간 모니터링
+- **차별점:** 전통 방식(항상 Fan 2 가동) 대비 실제 소비 전력량을 매 스텝 누적 비교하여 **절약률(%)** 을 실시간 산출합니다.
+- **기대효과:** 논문 및 보고서용 정량 데이터(kWh, 절약률, PMV 쾌적 유지율) 자동 수집으로 시스템 효과를 객관적으로 증명합니다.
+
 ---
 
 ## 5. 특화 적용 시나리오 (Application Scenarios)
@@ -66,26 +74,33 @@ graph TD
     subgraph "2. Edge AI Core (NVIDIA Jetson)"
         B1[RAM Buffer] -- "Raw Image" --> C1
         C1{Qwen2.5-VL INT4} -- "Visual Inference" --> D1
-        D1[JSON: Occupants, Met, Clo] -- "Standardized Meta" --> E1
+        D1["JSON: Met, Clo, Count\nBags, Heat Source, Activity"] -- "Standardized Meta" --> E1
         D1 -.-> |"⚠️ Secure Wipe"| B1
-        
+
         B2[Data Aggregator] -- "Digital Values" --> E1
         E1[Hybrid Logic] -- "ISO 7730 PMV Calculation" --> F1
+
+        D1 --> SM["State Machine\nEMPTY → ARRIVAL\n→ STEADY → PRE_DEPARTURE"]
+        SM -- "Control Mode" --> F1
     end
 
     subgraph "3. Control Output (HVAC)"
-        F1[Control Signals] -- "Target Temp/Fan Speed" --> G1[Smart HVAC/Simulator]
+        F1[Rule-Based Controller] -- "Target Temp / Fan Speed\nWindow Open/Close" --> G1[Smart HVAC/Simulator]
+        F1 --> EM[Energy Monitor\nkWh / Savings % / Comfort Rate]
     end
 
     style C1 fill:#f96,stroke:#333,stroke-width:2px
     style B1 fill:#fff4dd,stroke:#d4a017
     style G1 fill:#e1f5fe,stroke:#01579b
+    style SM fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style EM fill:#fff3cd,stroke:#ffc107,stroke-width:2px
 ```
 
 ### 6.2 하드웨어 및 소프트웨어 스택
 - **하드웨어:** **NVIDIA Jetson Orin Nano Super (8GB)** - TensorRT 가속 및 8GB UMA를 활용한 오프라인 구동 최적화.
 - **소프트웨어:** **Qwen2.5-VL (3B)** - 경량 파라미터 기반의 정교한 시각 인지 및 JSON 파싱 능력 활용.
-- **데이터 파이프라인:** `이미지 캡처 -> VLM 추론 -> 맥락 추출(Met/Clo) -> 원본 파기 -> IoT 융합 -> PMV 엔진 -> 제어 명령`.
+- **데이터 파이프라인:** `이미지 캡처 → VLM 추론 → 맥락 추출(Met/Clo/Bags/HeatSource) → 원본 파기 → IoT 융합 → 상태 머신 갱신 → PMV 엔진 → Rule-Based 제어 명령 → 에너지 누적 기록`.
+- **신규 파일:** `state_machine.py` (4단계 상태 전이 + 퇴근 맥락 점수), `energy_monitor.py` (소비전력 누적 + 베이스라인 비교).
 
 ---
 
