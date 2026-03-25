@@ -26,9 +26,10 @@ class VLMProcessor:
       activity    : 활동 분류 → met 변환
 
     맥락 신호:
-      people      : 재실 인원 수 → 재실 열부하 및 제어 세기
       bags        : 가방 소지 → 퇴근 맥락 점수 (+25)
       heat_source : 조리기구 등 열원 → 복사온도(tr) 보정 및 환기 우선
+
+    ※ 인원 수(people)는 YOLODetector가 전담 — VLM 프롬프트에서 제거됨.
     """
 
     # PMV 입력 매핑 테이블 (ISO 7730:2005 근거)
@@ -99,13 +100,13 @@ class VLMProcessor:
             dict: {
                 'clo': float,          착의량 (ISO 7730)
                 'met': float,          대사율 (ISO 7730)
-                'count': int,          재실 인원 수
                 'bags': str,           가방 소지 ('yes'|'no')
                 'heat_source': str,    열원 존재 ('yes'|'no')
                 'outerwear': str,      아우터 착용 ('yes'|'no')
                 'activity': str,       활동 분류 원문
             }
             None: 분석 실패 시
+            ※ 인원 수는 YOLODetector.count_people()에서 별도 반환
         """
         if self.model is None or self.processor is None:
             print("⚠️ [VLM] 모델이 로드되지 않아 분석 불가.")
@@ -120,7 +121,6 @@ class VLMProcessor:
             "{'sleeves': 'long'|'short', "
             "'outerwear': 'yes'|'no', "
             "'activity': 'lying'|'sitting'|'standing'|'walking'|'cooking'|'exercising', "
-            "'people': <integer>, "
             "'bags': 'yes'|'no', "
             "'heat_source': 'yes'|'no'}"
         )
@@ -172,7 +172,6 @@ class VLMProcessor:
             return {
                 "clo":         round(clo, 2),
                 "met":         met,
-                "count":       max(0, int(data.get('people', 1))),
                 "bags":        data.get('bags', 'no'),
                 "heat_source": data.get('heat_source', 'no'),
                 "outerwear":   data.get('outerwear', 'no'),
