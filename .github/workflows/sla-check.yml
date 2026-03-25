@@ -1,0 +1,13 @@
+name: SLA Issue Monitoring
+
+on:
+  schedule:
+    - cron: "0 * * * *"  # 매 1시간마다 실행
+
+jobs:
+  sla-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SLA Check Start
+        run: echo "Checking issues without response..."
