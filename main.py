@@ -15,6 +15,9 @@ from thermal_engine import ThermalEngine
 from state_machine import StateManager, SystemState
 from energy_monitor import EnergyMonitor
 from motion_detector import MotionDetector
+from yolo_detector import YOLODetector
+from pid_controller import PIDController
+from sensor_interface import SensorInterface
 import dashboard as dash
 
 LOG_FILE      = "hvac_system_performance.csv"
@@ -31,6 +34,9 @@ WORK_START_HOUR = 9
 WORK_END_HOUR   = 18
 FAN_VELOCITY    = {1: 0.1, 2: 0.3, 3: 0.5}
 
+# YOLO 인원 감지 주기 (매 N프레임마다 실행)
+YOLO_EVERY_N_FRAMES = 5
+
 
 def initialize_csv():
     if not os.path.exists(LOG_FILE):
@@ -39,7 +45,7 @@ def initialize_csv():
             "system_state", "departure_score",
             "out_temp", "out_humid", "out_weather", "out_wind",
             "in_temp", "in_humid",
-            "people_count", "met", "clo", "activity",
+            "people_count", "count_source", "met", "clo", "activity",
             "bags", "heat_source",
             "motion_score", "met_source",
             "hvac_mode", "window_open", "room_size", "air_vel",
@@ -55,10 +61,17 @@ def save_log(data: dict):
 
 
 def decide_control(state: SystemState, pmv_val: float,
-                   people_count: int, outdoor_temp: float):
+                   people_count: int, outdoor_temp: float,
+                   pid: PIDController):
+    """
+    시스템 상태별 제어 결정.
+    STEADY 상태에서는 PID 출력으로 팬 속도를 결정합니다.
+    """
     if state == SystemState.EMPTY:
+        pid.reset()
         return False, None, None, None
     if state == SystemState.ARRIVAL:
+        pid.reset()
         if outdoor_temp < 15.0:
             return True, 25.0, 3, "heat"
         elif outdoor_temp > 28.0:
@@ -68,14 +81,19 @@ def decide_control(state: SystemState, pmv_val: float,
             return True, (25.0 if mode == "heat" else 23.0), 2, mode
     if state == SystemState.PRE_DEPARTURE:
         return True, 25.0, 1, None
-    if pmv_val > 0.5:
-        occ_offset  = min(2.0, max(0, people_count - 1) * 0.5)
-        target_temp = round(22.0 - occ_offset, 1)
-        fan_speed   = min(3, 2 + (1 if people_count >= 3 else 0))
-        return True, target_temp, fan_speed, "cool"
-    elif pmv_val < -0.5:
-        return True, 25.0, 1, "heat"
-    return None, None, None, None
+
+    # STEADY: PID 제어
+    pid_output = pid.compute(pmv_val)
+    if abs(pid_output) < 0.01:   # deadband 내 — 현재 설정 유지
+        return None, None, None, None
+    if pid_output > 0:           # 난방 필요 (PMV 음수)
+        fan = PIDController.output_to_fan_speed(pid_output)
+        occ_offset = min(2.0, max(0, people_count - 1) * 0.5)
+        return True, round(25.0 + occ_offset * 0.5, 1), fan, "heat"
+    else:                        # 냉방 필요 (PMV 양수)
+        fan = PIDController.output_to_fan_speed(pid_output)
+        occ_offset = min(2.0, max(0, people_count - 1) * 0.5)
+        return True, round(22.0 - occ_offset, 1), fan, "cool"
 
 
 def decide_window(state: SystemState, pmv_val: float,
@@ -117,9 +135,18 @@ def vlm_worker(vlm, frame_lock, shared_frame_ref,
         result_queue.put_nowait(result)
 
 
-def process_vlm_result(vlm_data, motion_det, hvac, sm, engine, em, display_state,
+def process_vlm_result(vlm_data, people_count, count_source,
+                       motion_det, hvac, sm, engine, em, pid,
+                       sensor, display_state,
                        out_temp, out_humid, out_weather, out_wind):
-    people_count  = vlm_data["count"]
+    """
+    VLM 결과 + YOLO 인원 수를 받아 PMV 계산, 제어 결정, 로그 저장.
+
+    Args:
+        vlm_data     : VLMProcessor.analyze_frame() 반환값
+        people_count : YOLODetector 또는 폴백 인원 수
+        count_source : 'yolo' | 'vlm_fallback'
+    """
     current_state = sm.update(people_count=people_count,
                               outerwear=vlm_data["outerwear"],
                               activity=vlm_data["activity"],
@@ -132,26 +159,29 @@ def process_vlm_result(vlm_data, motion_det, hvac, sm, engine, em, display_state
         effective_met = vlm_data["met"]
         met_source    = "vlm"
 
-    tr_corrected = hvac.indoor_temp
+    # SensorInterface: 실내 온습도 읽기 (simulate 모드에서는 hvac 값 그대로)
+    sensor_temp, sensor_humid = sensor.read_climate()
+
+    tr_corrected = sensor_temp
     if vlm_data["heat_source"] == "yes":
         tr_corrected += VLMProcessor.TR_HEAT_OFFSET
 
     air_vel     = FAN_VELOCITY.get(hvac.fan_speed, 0.1)
-    pmv_val     = engine.calculate_pmv(ta=hvac.indoor_temp, tr=tr_corrected,
-                                       rh=hvac.indoor_humid, vel=air_vel,
+    pmv_val     = engine.calculate_pmv(ta=sensor_temp, tr=tr_corrected,
+                                       rh=sensor_humid, vel=air_vel,
                                        met=effective_met, clo=vlm_data["clo"])
     comfort_msg = engine.get_comfort_status(pmv_val)
     em.tick(hvac.is_on, hvac.fan_speed, people_count, pmv_val)
 
     window_cmd = decide_window(current_state, pmv_val, out_temp,
-                               hvac.indoor_temp, vlm_data["heat_source"], hvac.mode)
+                               sensor_temp, vlm_data["heat_source"], hvac.mode)
     if window_cmd is not None and hvac.window_open != window_cmd:
         hvac.window_open = window_cmd
 
     hvac.simulate_step(out_temp, out_humid, people_count=people_count)
 
     power, target_temp, fan_speed, mode = decide_control(
-        current_state, pmv_val, people_count, out_temp)
+        current_state, pmv_val, people_count, out_temp, pid)
 
     if power is False:
         hvac.set_control(power=False, target=hvac.target_temp, fan=1)
@@ -167,6 +197,7 @@ def process_vlm_result(vlm_data, motion_det, hvac, sm, engine, em, display_state
         "pmv_val":       pmv_val,
         "comfort_msg":   comfort_msg,
         "people_count":  people_count,
+        "count_source":  count_source,
         "activity":      vlm_data["activity"],
         "met":           effective_met,
         "clo":           vlm_data["clo"],
@@ -183,8 +214,9 @@ def process_vlm_result(vlm_data, motion_det, hvac, sm, engine, em, display_state
         "departure_score": sm.departure_score,
         "out_temp":        out_temp, "out_humid":   out_humid,
         "out_weather":     out_weather, "out_wind": out_wind,
-        "in_temp":         hvac.indoor_temp, "in_humid": hvac.indoor_humid,
+        "in_temp":         sensor_temp, "in_humid": sensor_humid,
         "people_count":    people_count,
+        "count_source":    count_source,
         "met":             effective_met, "clo": vlm_data["clo"],
         "activity":        vlm_data["activity"],
         "bags":            vlm_data["bags"], "heat_source": vlm_data["heat_source"],
@@ -212,6 +244,9 @@ def main(analysis_interval: int = 30):
     sm         = StateManager(work_start_hour=WORK_START_HOUR, work_end_hour=WORK_END_HOUR)
     em         = EnergyMonitor()
     motion_det = MotionDetector(history_len=10, blur_ksize=21)
+    yolo       = YOLODetector(imgsz=320, conf=0.35)
+    pid        = PIDController(kp=0.8, ki=0.05, kd=0.3)
+    sensor     = SensorInterface(simulator=hvac)
 
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
@@ -232,7 +267,8 @@ def main(analysis_interval: int = 30):
 
     display_state = {
         "pmv_val": 0.0, "comfort_msg": "분석 대기 중",
-        "people_count": 0, "activity": "-",
+        "people_count": 0, "count_source": "yolo",
+        "activity": "-",
         "met": 1.0, "clo": 1.0,
         "bags": "no", "heat_source": "no",
         "motion_score": 0.0, "met_source": "vlm",
@@ -240,19 +276,32 @@ def main(analysis_interval: int = 30):
     }
 
     last_people_count  = 0
+    last_count_source  = "yolo"
+    last_vlm_data      = None
     out_temp, out_humid, out_weather, out_wind = 20.0, 50.0, "unknown", 0.0
     last_weather_fetch = 0.0
+    frame_count        = 0
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
+        frame_count += 1
+
         with frame_lock:
             shared_frame_ref[0] = frame.copy()
 
         motion_det.update(frame)
         display_state["motion_score"] = motion_det.current_score
+
+        # ── YOLO 인원 감지 (매 N프레임) ───────────────────────────────────────
+        if frame_count % YOLO_EVERY_N_FRAMES == 0:
+            yolo_count = yolo.count_people(frame)
+            if yolo_count >= 0:
+                last_people_count = yolo_count
+                last_count_source = "yolo"
+            # yolo_count == -1: YOLO 미사용 → last_people_count(VLM 폴백) 유지
 
         if time.time() - last_weather_fetch >= WEATHER_FETCH_SEC:
             out_temp, out_humid, out_weather, out_wind = weather.fetch_current_weather()
@@ -261,11 +310,19 @@ def main(analysis_interval: int = 30):
         hvac.simulate_step(out_temp, out_humid, people_count=last_people_count)
         em.tick(hvac.is_on, hvac.fan_speed, last_people_count)
 
+        # ── VLM 결과 처리 ─────────────────────────────────────────────────────
         try:
             vlm_data = result_queue.get_nowait()
-            last_people_count = vlm_data["count"]
+            last_vlm_data = vlm_data
+
+            # YOLO 가용 시 YOLO 인원 수 사용, 불가 시 VLM 폴백 없음(인원 유지)
+            if not yolo.available:
+                last_count_source = "vlm_fallback"
+
             log_row = process_vlm_result(
-                vlm_data, motion_det, hvac, sm, engine, em, display_state,
+                vlm_data, last_people_count, last_count_source,
+                motion_det, hvac, sm, engine, em, pid,
+                sensor, display_state,
                 out_temp, out_humid, out_weather, out_wind,
             )
             save_log(log_row)
@@ -288,9 +345,11 @@ def main(analysis_interval: int = 30):
                 frame_copy = shared_frame_ref[0].copy()
             vlm_data = vlm.analyze_frame(frame_copy)
             if vlm_data:
-                last_people_count = vlm_data["count"]
+                last_vlm_data = vlm_data
                 log_row = process_vlm_result(
-                    vlm_data, motion_det, hvac, sm, engine, em, display_state,
+                    vlm_data, last_people_count, last_count_source,
+                    motion_det, hvac, sm, engine, em, pid,
+                    sensor, display_state,
                     out_temp, out_humid, out_weather, out_wind,
                 )
                 save_log(log_row)

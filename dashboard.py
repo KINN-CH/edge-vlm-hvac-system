@@ -217,19 +217,20 @@ def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm) -> int:
 
 
 def _draw_occupancy(draw: ImageDraw.Draw, y: int, ds: dict) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 78)], fill=BG_SECT)
+    draw.rectangle([(0, y), (PANEL_W, y + 100)], fill=BG_SECT)
     y = _sect_header(draw, y, '  재실 상황')
 
-    people = ds.get('people_count', 0)
-    p_col  = C_GREEN if people > 0 else C_LABEL
+    people      = ds.get('people_count', 0)
+    count_src   = ds.get('count_source', 'YOLO').upper()
+    p_col       = C_GREEN if people > 0 else C_LABEL
+    src_col     = C_CYAN if count_src == 'YOLO' else C_ORANGE
     y = _row2(draw, y,
-              '인원',    f'{people}명',                  p_col,
-              '모션',   f"{ds.get('motion_score', 0.0):.1f}", C_VAL)
-    act = ds.get('activity', '-')
-    src = ds.get('met_source', 'vlm').upper()
+              '인원',    f'{people}명',                       p_col,
+              '감지',    count_src,                           src_col)
     y = _row2(draw, y,
-              '활동',    f"{act}",                        C_VAL,
-              'MET',    f"{ds.get('met', 1.0):.1f} ({src})", C_VAL)
+              '모션',    f"{ds.get('motion_score', 0.0):.1f}", C_VAL,
+              'MET',    f"{ds.get('met', 1.0):.1f} ({ds.get('met_source','vlm').upper()})", C_VAL)
+    y = _row1(draw, y, '활동', ds.get('activity', '-'), C_VAL)
     return y
 
 
