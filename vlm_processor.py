@@ -11,8 +11,13 @@ from qwen_vl_utils import process_vision_info
 class VLMProcessor:
     """
     [Vision Language Model 처리기]
-    모델: Qwen2-VL-2B-Instruct (MPS/CPU 자동 선택)
+    모델: Qwen2-VL-2B-Instruct (디바이스 자동 선택)
     역할: 카메라 프레임에서 PMV 입력 파라미터 및 맥락 신호를 추출합니다.
+
+    ── 디바이스 우선순위 ───────────────────────────────────────────────────────
+      1. MPS  (Apple Silicon M1~M5) — float16
+      2. CUDA (NVIDIA GPU)          — float16
+      3. CPU  (그 외 모든 환경)       — float32
 
     ── 감지 항목 ──────────────────────────────────────────────────────────────
     PMV 입력:
@@ -45,9 +50,9 @@ class VLMProcessor:
     def _select_device():
         """
         최적 추론 디바이스 자동 선택
-          - Apple Silicon (M1~M5): MPS + float16
-          - CUDA GPU:              CUDA + float16
-          - 그 외:                 CPU  + float32
+          - Apple Silicon (MPS 사용 가능):  'mps',  float16
+          - NVIDIA GPU (CUDA 사용 가능):    'cuda', float16
+          - CPU 전용 또는 그 외:            'cpu',  float32
         """
         if torch.backends.mps.is_available():
             return "mps", torch.float16
@@ -64,13 +69,14 @@ class VLMProcessor:
 
         try:
             if self.device == "mps":
-                # Apple Silicon: CPU에서 float16으로 로드 후 MPS 이동
+                # Apple Silicon: device_map 미사용, 로드 후 .to('mps')
                 self.model = Qwen2VLForConditionalGeneration.from_pretrained(
                     self.model_id,
                     torch_dtype=self.dtype,
                     low_cpu_mem_usage=True,
                 ).to(self.device)
             else:
+                # CUDA / CPU: device_map으로 직접 배치
                 self.model = Qwen2VLForConditionalGeneration.from_pretrained(
                     self.model_id,
                     torch_dtype=self.dtype,
@@ -78,7 +84,8 @@ class VLMProcessor:
                     device_map={"": self.device},
                 )
             self.processor = AutoProcessor.from_pretrained(self.model_id)
-            print(f"✅ [VLM] {self.model_id} 로드 완료 ({self.device}, {self.dtype})")
+            print(f"✅ [VLM] {self.model_id} 로드 완료 "
+                  f"(device={self.device}, dtype={self.dtype})")
         except Exception as e:
             print(f"❌ [VLM] 모델 로드 실패: {e}")
             self.model     = None
@@ -126,12 +133,13 @@ class VLMProcessor:
             ],
         }]
 
-        text           = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        text            = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, _ = process_vision_info(messages)
-        inputs         = self.processor(
+        inputs          = self.processor(
             text=[text], images=image_inputs, padding=True, return_tensors="pt"
         )
-        # MPS/CUDA float16: pixel_values는 float16으로 캐스팅 후 디바이스 이동
+
+        # MPS/CUDA: pixel_values를 모델 dtype(float16)으로 캐스팅 후 디바이스 이동
         if self.device in ("mps", "cuda") and "pixel_values" in inputs:
             inputs["pixel_values"] = inputs["pixel_values"].to(self.dtype)
         inputs = inputs.to(self.device)
