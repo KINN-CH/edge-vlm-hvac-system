@@ -386,7 +386,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='VLM 기반 지능형 HVAC 제어 시스템')
     parser.add_argument(
         '--interval', type=int, default=30,
-        help='자동 VLM 분석 주기 (초, 기본값: 30 / Jetson 권장: 5~10)'
+        help='자동 VLM 분석 주기 (초, 기본값: 30 / M5 Mac MPS 권장: 10~15 / Jetson TensorRT 권장: 5~10)'
     )
     args = parser.parse_args()
     main(analysis_interval=args.interval)
