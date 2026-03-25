@@ -1,42 +1,63 @@
 name: DORA Metrics Collection
+
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [closed]
     branches: [main]
   schedule:
-    - cron: '0 0 * * 1' # 매주 월요일 자동 리포트
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: write
   issues: write
-  pull-requests: write
+  pull-requests: read
 
 jobs:
   calculate-dora:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Compute Metrics
-        run: |
-          echo '{"df": "Daily", "lt": "1.2d", "mttr": "30m", "cfr": "0%"}' > metrics.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests python-dateutil
+
+      - name: Calculate DORA Metrics
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: python3 week2/collect_metrics.py
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: dora-report
-          path: metrics.json
-      - name: Create Weekly Issue
+          path: week2/dora_metrics.json
+
+      - name: Create Weekly Issue Report
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.create({
+            const fs = require('fs');
+            const metrics = JSON.parse(fs.readFileSync('week2/dora_metrics.json', 'utf8'));
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "[Weekly DORA Report] " + new Date().toLocaleDateString(),
-              body: "## 📊 이번 주 DORA 지표
-- DF: Daily
-- LT: 1.2 days
-- MTTR: 30 mins
-- CFR: 0%"
-            })
+              title: `[Weekly DORA Report] ${metrics.collected_at}`,
+              labels: ['dora-report'],
+              body: `## 📊 DORA Metrics — ${metrics.collected_at}\n\n| 지표 | 값 |\n|------|----|\\n| 🚀 Deployment Frequency | ${metrics.deployment_frequency} |\n| ⏱ Lead Time for Changes | ${metrics.lead_time_for_changes} |\n| 🔥 Change Failure Rate | ${metrics.change_failure_rate} |\n| 🛠 MTTR | ${metrics.mttr} |\n\n> 자동 생성된 주간 리포트입니다.`
+            });
