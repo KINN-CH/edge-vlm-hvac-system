@@ -5,7 +5,7 @@ on:
     types: [opened]
 
 permissions:
-  issues: write   # 🔥 이거 추가!!
+  issues: write   #  이거 추가
 
 jobs:
   auto-comment:
@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Add comment to new issue
-        uses: actions/github-script@v7   # 🔥 v7 추천 (최신)
+        uses: actions/github-script@v6 
         with:
           script: |
             github.rest.issues.createComment({
