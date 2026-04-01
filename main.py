@@ -7,9 +7,11 @@ import argparse
 import numpy as np
 import pandas as pd
 from datetime import datetime
+from dotenv import load_dotenv
 
 from vlm_processor import VLMProcessor
 from weather_service import WeatherService
+from air_quality_service import AirQualityService
 from hvac_simulator import HVACSimulator
 from thermal_engine import ThermalEngine
 from state_machine import StateManager, SystemState
@@ -20,13 +22,19 @@ from pid_controller import PIDController
 from sensor_interface import SensorInterface
 import dashboard as dash
 
+# .env 파일 로드
+load_dotenv()
+
 LOG_FILE      = "hvac_system_performance.csv"
 SCENARIO_NAME = "Smart_Office_Initial_Test"
 
-WEATHER_API_KEY   = "97e9ad342e69a006e6c55886b18842c2"
+WEATHER_API_KEY   = os.getenv("WEATHER_API_KEY", "97e9ad342e69a006e6c55886b18842c2")
 WEATHER_LAT       = 35.1044
 WEATHER_LON       = 128.9750
 WEATHER_FETCH_SEC = 60
+
+AIR_QUALITY_API_KEY = os.getenv("AIR_QUALITY_API_KEY", "")
+AIR_QUALITY_STATION = os.getenv("AIR_QUALITY_STATION", "장림동")
 
 ROOM_SIZE_M2    = 20.0
 WINDOW_OPEN     = False
@@ -52,6 +60,7 @@ def initialize_csv():
             "pmv_val", "comfort_status",
             "target_temp", "fan_speed",
             "power_w", "energy_kwh", "baseline_kwh", "savings_pct", "comfort_rate",
+            "pm10", "pm25", "khai",
         ]
         pd.DataFrame(columns=columns).to_csv(LOG_FILE, index=False)
 
@@ -138,7 +147,8 @@ def vlm_worker(vlm, frame_lock, shared_frame_ref,
 def process_vlm_result(vlm_data, people_count, count_source,
                        motion_det, hvac, sm, engine, em, pid,
                        sensor, display_state,
-                       out_temp, out_humid, out_weather, out_wind):
+                       out_temp, out_humid, out_weather, out_wind,
+                       pm10, pm25, khai):
     """
     VLM 결과 + YOLO 인원 수를 받아 PMV 계산, 제어 결정, 로그 저장.
 
@@ -205,6 +215,9 @@ def process_vlm_result(vlm_data, people_count, count_source,
         "heat_source":   vlm_data["heat_source"],
         "met_source":    met_source,
         "last_analysis": datetime.now().strftime("%H:%M:%S"),
+        "pm10":          pm10,
+        "pm25":          pm25,
+        "khai":          khai,
     })
 
     return {
@@ -231,13 +244,17 @@ def process_vlm_result(vlm_data, people_count, count_source,
         "baseline_kwh":    em.get_baseline_kwh(),
         "savings_pct":     em.get_savings_pct(),
         "comfort_rate":    em.get_comfort_rate(),
+        "pm10":            pm10,
+        "pm25":            pm25,
+        "khai":            khai,
     }
 
 
 def main(analysis_interval: int = 30):
     initialize_csv()
     vlm        = VLMProcessor()
-    weather    = WeatherService(lat=WEATHER_LAT, lon=WEATHER_LON, api_key=WEATHER_API_KEY)
+    weather    = WeatherService(lat=WEATHER_LAT, lon=WEATHER_LON)
+    air_quality = AirQualityService(service_key=AIR_QUALITY_API_KEY, station_name=AIR_QUALITY_STATION)
     hvac       = HVACSimulator(room_size=ROOM_SIZE_M2)
     hvac.set_room(ROOM_SIZE_M2, WINDOW_OPEN)
     engine     = ThermalEngine()
@@ -273,12 +290,14 @@ def main(analysis_interval: int = 30):
         "bags": "no", "heat_source": "no",
         "motion_score": 0.0, "met_source": "vlm",
         "last_analysis": "--:--:--",
+        "pm10": 0, "pm25": 0, "khai": 0,
     }
 
     last_people_count  = 0
     last_count_source  = "yolo"
     last_vlm_data      = None
     out_temp, out_humid, out_weather, out_wind = 20.0, 50.0, "unknown", 0.0
+    pm10, pm25, khai = 0, 0, 0
     last_weather_fetch = 0.0
     frame_count        = 0
 
@@ -305,6 +324,7 @@ def main(analysis_interval: int = 30):
 
         if time.time() - last_weather_fetch >= WEATHER_FETCH_SEC:
             out_temp, out_humid, out_weather, out_wind = weather.fetch_current_weather()
+            pm10, pm25, khai = air_quality.fetch_air_quality()
             last_weather_fetch = time.time()
 
         hvac.simulate_step(out_temp, out_humid, people_count=last_people_count)
@@ -324,6 +344,7 @@ def main(analysis_interval: int = 30):
                 motion_det, hvac, sm, engine, em, pid,
                 sensor, display_state,
                 out_temp, out_humid, out_weather, out_wind,
+                pm10, pm25, khai,
             )
             save_log(log_row)
         except queue.Empty:
@@ -351,6 +372,7 @@ def main(analysis_interval: int = 30):
                     motion_det, hvac, sm, engine, em, pid,
                     sensor, display_state,
                     out_temp, out_humid, out_weather, out_wind,
+                    pm10, pm25, khai,
                 )
                 save_log(log_row)
 

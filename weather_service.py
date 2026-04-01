@@ -1,73 +1,144 @@
 import requests
+import math
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class WeatherService:
     """
-    [외부 기상 데이터 서비스]
-    역할: OpenWeatherMap API를 통해 실시간 실외 환경 정보 수집
-
-    위도/경도 기반 쿼리 사용 → 구(district) 단위 지역도 정확하게 조회 가능
-    (city 이름 방식은 행정구 단위에서 404 오류 발생)
+    [기상청 초단기실황 기반 날씨 서비스]
 
     수신 항목:
-        - temp        : 외부 기온 (°C)
-        - humid       : 외부 습도 (%)
-        - weather     : 날씨 상태 설명 (예: "clear sky", "light rain")
-        - wind_speed  : 풍속 (m/s)  – 향후 외풍 계산 등에 활용 가능
+        - temp        : 기온 (°C) → T1H
+        - humid       : 습도 (%) → REH
+        - weather     : 강수 형태 → PTY
+        - wind_speed  : 풍속 (m/s) → WSD
     """
 
-    def __init__(self, lat: float = 35.1044, lon: float = 128.9750, api_key: str = None):
-        """
-        Args:
-            lat     : 위도  (기본값: 사하구, 부산)
-            lon     : 경도  (기본값: 사하구, 부산)
-            api_key : OpenWeatherMap API 키
-        """
-        self.lat     = lat
-        self.lon     = lon
-        self.api_key = api_key
+    def __init__(self, lat=35.1044, lon=128.9750):
+        self.lat = lat
+        self.lon = lon
+        self.service_key = os.getenv("WEATHER_API_KEY")
 
-        # 기본값 (API 장애 또는 키 없을 때 폴백)
-        self.temp       = 20.0
-        self.humid      = 50.0
-        self.weather    = "unknown"
+        # 기본값
+        self.temp = 20.0
+        self.humid = 50.0
+        self.weather = "unknown"
         self.wind_speed = 0.0
 
-    def fetch_current_weather(self):
-        """
-        현재 날씨 데이터를 API에서 수신
+    # ✅ 위경도 → 기상청 격자 변환
+    def _latlon_to_grid(self, lat, lon):
+        RE = 6371.00877
+        GRID = 5.0
+        SLAT1 = 30.0
+        SLAT2 = 60.0
+        OLON = 126.0
+        OLAT = 38.0
+        XO = 43
+        YO = 136
 
-        Returns:
-            tuple: (temp: float, humid: float, weather: str, wind_speed: float)
-                   API 실패 시 마지막 성공값(또는 기본값) 반환
-        """
-        if not self.api_key:
+        DEGRAD = math.pi / 180.0
+
+        re = RE / GRID
+        slat1 = SLAT1 * DEGRAD
+        slat2 = SLAT2 * DEGRAD
+        olon = OLON * DEGRAD
+        olat = OLAT * DEGRAD
+
+        sn = math.tan(math.pi * 0.25 + slat2 * 0.5) / math.tan(math.pi * 0.25 + slat1 * 0.5)
+        sn = math.log(math.cos(slat1) / math.cos(slat2)) / math.log(sn)
+
+        sf = math.tan(math.pi * 0.25 + slat1 * 0.5)
+        sf = math.pow(sf, sn) * math.cos(slat1) / sn
+
+        ro = math.tan(math.pi * 0.25 + olat * 0.5)
+        ro = re * sf / math.pow(ro, sn)
+
+        ra = math.tan(math.pi * 0.25 + lat * DEGRAD * 0.5)
+        ra = re * sf / math.pow(ra, sn)
+
+        theta = lon * DEGRAD - olon
+        if theta > math.pi:
+            theta -= 2.0 * math.pi
+        if theta < -math.pi:
+            theta += 2.0 * math.pi
+
+        theta *= sn
+
+        nx = int(ra * math.sin(theta) + XO + 0.5)
+        ny = int(ro - ra * math.cos(theta) + YO + 0.5)
+
+        return nx, ny
+
+    # ✅ base_date, base_time 생성
+    def _get_base_datetime(self):
+        now = datetime.now()
+
+        base_date = now.strftime("%Y%m%d")
+        base_time = now.strftime("%H00")
+
+        return base_date, base_time
+
+    # ✅ 날씨 조회
+    def fetch_current_weather(self):
+        if not self.service_key:
             return self.temp, self.humid, self.weather, self.wind_speed
 
         try:
+            nx, ny = self._latlon_to_grid(self.lat, self.lon)
+            base_date, base_time = self._get_base_datetime()
+
             url = (
-                f"https://api.openweathermap.org/data/2.5/weather"
-                f"?lat={self.lat}&lon={self.lon}"
-                f"&appid={self.api_key}&units=metric"
+                "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/"
+                "getUltraSrtNcst"
             )
-            response = requests.get(url, timeout=5)
+
+            params = {
+                "serviceKey": self.service_key,
+                "pageNo": "1",
+                "numOfRows": "10",
+                "dataType": "JSON",
+                "base_date": base_date,
+                "base_time": base_time,
+                "nx": nx,
+                "ny": ny
+            }
+
+            response = requests.get(url, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
 
-            if "main" not in data:
-                print(f"🌐 [Weather] 예상치 못한 응답 형식: {data.get('message', data)}")
-                return self.temp, self.humid, self.weather, self.wind_speed
+            items = data["response"]["body"]["items"]["item"]
 
-            self.temp       = data['main']['temp']
-            self.humid      = data['main']['humidity']
-            self.weather    = data['weather'][0]['description'] if data.get('weather') else "unknown"
-            self.wind_speed = data.get('wind', {}).get('speed', 0.0)
+            # 카테고리별 파싱
+            for item in items:
+                category = item["category"]
+                value = item["obsrValue"]
 
-        except requests.exceptions.HTTPError as e:
-            print(f"🌐 [Weather] HTTP 오류: {e}")
-        except requests.exceptions.Timeout:
-            print("🌐 [Weather] 요청 시간 초과 – 이전 값 유지")
+                if category == "T1H":
+                    self.temp = float(value)
+                elif category == "REH":
+                    self.humid = float(value)
+                elif category == "WSD":
+                    self.wind_speed = float(value)
+                elif category == "PTY":
+                    self.weather = self._parse_weather(int(value))
+
         except Exception as e:
-            print(f"🌐 [Weather] 예기치 않은 오류: {e}")
+            print(f"🌤 [Weather] 오류: {e}")
 
         return self.temp, self.humid, self.weather, self.wind_speed
+
+    # ✅ 강수 형태 변환
+    def _parse_weather(self, pty):
+        mapping = {
+            0: "맑음",
+            1: "비",
+            2: "비/눈",
+            3: "눈",
+            4: "소나기"
+        }
+        return mapping.get(pty, "unknown")
