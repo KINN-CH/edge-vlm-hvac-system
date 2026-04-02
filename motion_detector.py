@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from collections import deque
+from typing import Optional
 
 
 class MotionDetector:
@@ -68,7 +69,7 @@ class MotionDetector:
 
         return self._current_score
 
-    def get_motion_met(self) -> float | None:
+    def get_motion_met(self) -> Optional[float]:
         """
         현재 motion_score를 ISO 7730 MET 값으로 변환합니다.
 

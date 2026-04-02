@@ -71,10 +71,12 @@ class VLMProcessor:
         try:
             if self.device == "mps":
                 # Apple Silicon: device_map 미사용, 로드 후 .to('mps')
+                # attn_implementation="eager": MPS SDPA 차원 버그 우회
                 self.model = Qwen2VLForConditionalGeneration.from_pretrained(
                     self.model_id,
                     torch_dtype=self.dtype,
                     low_cpu_mem_usage=True,
+                    attn_implementation="eager",
                 ).to(self.device)
             else:
                 # CUDA / CPU: device_map으로 직접 배치

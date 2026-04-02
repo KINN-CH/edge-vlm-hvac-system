@@ -250,7 +250,15 @@ def main(analysis_interval: int = 30):
 
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        return
+        print("카메라를 열 수 없습니다. 시뮬레이션 모드로 전환합니다.")
+        # 시뮬레이션용 더미 프레임 생성 (카메라 없음)
+        dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(dummy_frame, "Simulation Mode", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(dummy_frame, "No Camera Available", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        use_camera = False
+    else:
+        print("카메라가 성공적으로 연결되었습니다.")
+        use_camera = True
 
     frame_lock       = threading.Lock()
     shared_frame_ref = [None]
@@ -282,10 +290,26 @@ def main(analysis_interval: int = 30):
     last_weather_fetch = 0.0
     frame_count        = 0
 
+    # ── 수동 제어 상태 ────────────────────────────────────────────────────────
+    manual_ctrl = {
+        "enabled":     False,   # True = 수동 모드 (자동 제어 비활성)
+        "power":       False,
+        "mode":        "cool",  # 'cool' | 'heat'
+        "target_temp": 24.0,
+        "fan_speed":   2,       # 1~3
+    }
+
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        if use_camera:
+            ret, frame = cap.read()
+            if not ret:
+                print("카메라 프레임을 읽을 수 없습니다. 시뮬레이션으로 전환합니다.")
+                use_camera = False
+                frame = dummy_frame.copy()
+            else:
+                frame = frame
+        else:
+            frame = dummy_frame.copy()  # 시뮬레이션용 더미 프레임 사용
 
         frame_count += 1
 
@@ -306,6 +330,15 @@ def main(analysis_interval: int = 30):
         if time.time() - last_weather_fetch >= WEATHER_FETCH_SEC:
             out_temp, out_humid, out_weather, out_wind = weather.fetch_current_weather()
             last_weather_fetch = time.time()
+
+        # ── 수동 모드: 자동 제어 대신 수동 설정 즉시 적용 ───────────────────
+        if manual_ctrl["enabled"]:
+            hvac.set_control(
+                power  = manual_ctrl["power"],
+                target = manual_ctrl["target_temp"],
+                fan    = manual_ctrl["fan_speed"],
+                mode   = manual_ctrl["mode"],
+            )
 
         hvac.simulate_step(out_temp, out_humid, people_count=last_people_count)
         em.tick(hvac.is_on, hvac.fan_speed, last_people_count)
@@ -332,11 +365,13 @@ def main(analysis_interval: int = 30):
         cam_h = frame.shape[0]
         panel = dash.build(cam_h, hvac, sm, em,
                            out_temp, out_humid, out_weather, out_wind,
-                           display_state)
+                           display_state, manual_ctrl)
         combined = np.hstack([frame, panel])
         cv2.imshow("VLM Intelligent HVAC System", combined)
 
         key = cv2.waitKey(1) & 0xFF
+
+        # ── 공통 키 ───────────────────────────────────────────────────────────
         if key == ord("w"):
             hvac.window_open = not hvac.window_open
 
@@ -360,7 +395,57 @@ def main(analysis_interval: int = 30):
             em.print_summary()
             break
 
-    cap.release()
+        # ── 수동 제어 키 ──────────────────────────────────────────────────────
+        elif key == ord("m"):
+            # M: 수동/자동 모드 전환
+            manual_ctrl["enabled"] = not manual_ctrl["enabled"]
+            if manual_ctrl["enabled"]:
+                # 자동→수동 전환 시 현재 hvac 상태를 수동 초기값으로 복사
+                manual_ctrl["power"]       = hvac.is_on
+                manual_ctrl["mode"]        = hvac.mode if hasattr(hvac.mode, '__len__') else "cool"
+                manual_ctrl["target_temp"] = hvac.target_temp
+                manual_ctrl["fan_speed"]   = max(1, hvac.fan_speed)
+                print(f"[수동 모드 ON] 현재 설정 복사 완료")
+            else:
+                pid.reset()
+                print(f"[자동 모드 복귀]")
+
+        elif manual_ctrl["enabled"]:
+            # 수동 모드 전용 키
+            if key == ord("p"):
+                # P: 전원 ON/OFF
+                manual_ctrl["power"] = not manual_ctrl["power"]
+                print(f"[수동] 전원 {'ON' if manual_ctrl['power'] else 'OFF'}")
+
+            elif key == ord("c"):
+                # C: 냉방 모드
+                manual_ctrl["mode"]  = "cool"
+                manual_ctrl["power"] = True
+                print("[수동] 냉방 모드")
+
+            elif key == ord("h"):
+                # H: 난방 모드
+                manual_ctrl["mode"]  = "heat"
+                manual_ctrl["power"] = True
+                print("[수동] 난방 모드")
+
+            elif key == ord("=") or key == ord("+"):
+                # +: 설정온도 +1°C
+                manual_ctrl["target_temp"] = min(30.0, manual_ctrl["target_temp"] + 1.0)
+                print(f"[수동] 설정온도 {manual_ctrl['target_temp']:.0f}°C")
+
+            elif key == ord("-"):
+                # -: 설정온도 -1°C
+                manual_ctrl["target_temp"] = max(16.0, manual_ctrl["target_temp"] - 1.0)
+                print(f"[수동] 설정온도 {manual_ctrl['target_temp']:.0f}°C")
+
+            elif key == ord("f"):
+                # F: 팬 속도 순환 (1→2→3→1)
+                manual_ctrl["fan_speed"] = manual_ctrl["fan_speed"] % 3 + 1
+                print(f"[수동] 팬 속도 Fan {manual_ctrl['fan_speed']}")
+
+    if use_camera:
+        cap.release()
     cv2.destroyAllWindows()
 
 
