@@ -196,9 +196,20 @@ def _draw_indoor(draw: ImageDraw.Draw, y: int, hvac, ds: dict) -> int:
     return y
 
 
-def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 90)], fill=BG_SECT)
-    y = _sect_header(draw, y, '  에어컨 상태')
+def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm,
+               manual_ctrl: dict = None) -> int:
+    is_manual = manual_ctrl is not None and manual_ctrl.get("enabled", False)
+    bg_col = (50, 30, 30) if is_manual else BG_SECT
+    draw.rectangle([(0, y), (PANEL_W, y + 112)], fill=bg_col)
+
+    # 섹션 헤더 — 수동 모드 시 강조 표시
+    if is_manual:
+        draw.rectangle([(0, y), (PANEL_W, y + 26)], fill=(130, 40, 40))
+        draw.text((10, y + 5), '  에어컨 상태  ◀ 수동 조작 중',
+                  font=_font(13, bold=True), fill=(255, 120, 120))
+        y += 26
+    else:
+        y = _sect_header(draw, y, '  에어컨 상태  [M키: 수동 전환]')
 
     # 모드 색상 및 텍스트
     mode_col  = C_HEAT if hvac.mode == 'heat' else C_COOL
@@ -213,6 +224,13 @@ def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm) -> int:
     score_str = f'(퇴근점수 {sm.departure_score})'
     y = _row1(draw, y, '상태', f'{state_str}  {score_str}',
               C_ORANGE if sm.state.value == 'PRE_DEPARTURE' else C_GREEN)
+
+    # 수동 모드 조작 안내
+    if is_manual:
+        hint = 'P:전원  C:냉방  H:난방  +/-:온도  F:팬'
+        draw.text((10, y + 2), hint, font=_font(11), fill=(200, 120, 120))
+        y += 20
+
     return y
 
 
@@ -265,7 +283,7 @@ def _draw_energy(draw: ImageDraw.Draw, y: int, end_y: int, hvac, em) -> None:
 def build(cam_h: int, hvac, sm, em,
           out_temp: float, out_humid: float,
           out_weather: str, out_wind: float,
-          ds: dict) -> np.ndarray:
+          ds: dict, manual_ctrl: dict = None) -> np.ndarray:
     """
     대시보드 패널 생성
 
@@ -294,7 +312,7 @@ def build(cam_h: int, hvac, sm, em,
     y  = _draw_outdoor(draw, y,                         # 88 px
                        out_temp, out_humid, out_weather, out_wind)
     y  = _draw_indoor(draw, y, hvac, ds)                # 88 px
-    y  = _draw_hvac(draw, y, hvac, sm)                  # 90 px
+    y  = _draw_hvac(draw, y, hvac, sm, manual_ctrl)      # 90~112 px
     y  = _draw_occupancy(draw, y, ds)                   # 78 px
 
     energy_h   = 30
