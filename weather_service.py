@@ -75,10 +75,14 @@ class WeatherService:
 
     # ✅ base_date, base_time 생성
     def _get_base_datetime(self):
+        from datetime import timedelta
         now = datetime.now()
-
-        base_date = now.strftime("%Y%m%d")
-        base_time = now.strftime("%H00")
+        
+        # 초단기실황은 시간 차이가 있을 수 있으므로 30분 전 데이터 요청
+        past_time = now - timedelta(minutes=30)
+        
+        base_date = past_time.strftime("%Y%m%d")
+        base_time = past_time.strftime("%H00")
 
         return base_date, base_time
 

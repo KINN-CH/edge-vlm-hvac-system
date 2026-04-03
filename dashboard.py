@@ -169,17 +169,41 @@ def _draw_header(draw: ImageDraw.Draw, y: int) -> int:
     return y + 40
 
 
+def _pm_color(pm10: int) -> tuple:
+    if pm10 <= 30:   return C_GREEN
+    if pm10 <= 80:   return C_ORANGE
+    return C_RED
+
+
 def _draw_outdoor(draw: ImageDraw.Draw, y: int,
                   temp: float, humid: float,
-                  weather: str, wind: float) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 88)], fill=BG_SECT)
+                  weather: str, wind: float,
+                  ds: dict = None) -> int:
+    draw.rectangle([(0, y), (PANEL_W, y + 110)], fill=BG_SECT)
     y = _sect_header(draw, y, '  실외 환경')
     y = _row2(draw, y,
               '기온',  f'{temp:.1f}°C',  _temp_color(temp, True),
               '습도',  f'{humid:.0f}%',  C_VAL)
     y = _row1(draw, y, '날씨', weather[:24], C_CYAN)
     y = _row1(draw, y, '풍속', f'{wind:.1f} m/s')
+    pm10 = int(ds.get('pm10', 0)) if ds else 0
+    pm25 = int(ds.get('pm25', 0)) if ds else 0
+    y = _row2(draw, y,
+              'PM10', f'{pm10} ㎍/㎥', _pm_color(pm10),
+              'PM2.5', f'{pm25} ㎍/㎥', _pm_color(pm25))
     return y
+
+
+def _khai_str(khai) -> tuple:
+    """통합대기환경지수 문자열 + 색상"""
+    try:
+        v = int(khai)
+    except (TypeError, ValueError):
+        return '-', C_LABEL
+    if v <= 1:   return '좋음', C_GREEN
+    if v <= 2:   return '보통', C_VAL
+    if v <= 3:   return '나쁨', C_ORANGE
+    return '매우나쁨', C_RED
 
 
 def _draw_indoor(draw: ImageDraw.Draw, y: int, hvac, ds: dict) -> int:
@@ -190,9 +214,10 @@ def _draw_indoor(draw: ImageDraw.Draw, y: int, hvac, ds: dict) -> int:
               '습도',  f'{hvac.indoor_humid:.0f}%', C_VAL)
     pmv = ds.get('pmv_val', 0.0)
     y = _row2(draw, y,
-              'PMV',   f'{pmv:+.2f}',           _pmv_color(pmv),
-              '상태',  ds.get('comfort_msg', '-')[:14], _pmv_color(pmv))
-    y = _row1(draw, y, '분석', ds.get('last_analysis', '--:--:--'), C_TIME)
+              'PMV',   f'{pmv:+.2f}',                    _pmv_color(pmv),
+              '상태',  ds.get('comfort_msg', '-')[:14],   _pmv_color(pmv))
+    khai_s, khai_c = _khai_str(ds.get('khai', 0))
+    y = _row1(draw, y, '대기질', khai_s, khai_c)
     return y
 
 
@@ -220,10 +245,9 @@ def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm,
     y = _row2(draw, y,
               '풍량',    f'Fan {hvac.fan_speed}',    C_VAL,
               '창문',    '열림' if hvac.window_open else '닫힘', C_CYAN)
-    state_str = sm.state.value
-    score_str = f'(퇴근점수 {sm.departure_score})'
-    y = _row1(draw, y, '상태', f'{state_str}  {score_str}',
-              C_ORANGE if sm.state.value == 'PRE_DEPARTURE' else C_GREEN)
+    occ_str = '재실 중' if sm.state.value != 'EMPTY' else '공실'
+    occ_col = C_GREEN if sm.state.value != 'EMPTY' else C_LABEL
+    y = _row1(draw, y, '재실', occ_str, occ_col)
 
     # 수동 모드 조작 안내
     if is_manual:
@@ -235,20 +259,39 @@ def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm,
 
 
 def _draw_occupancy(draw: ImageDraw.Draw, y: int, ds: dict) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 100)], fill=BG_SECT)
-    y = _sect_header(draw, y, '  재실 상황')
+    draw.rectangle([(0, y), (PANEL_W, y + 168)], fill=BG_SECT)
+    y = _sect_header(draw, y, '  재실 / VLM 분석')
 
-    people      = ds.get('people_count', 0)
-    count_src   = ds.get('count_source', 'YOLO').upper()
-    p_col       = C_GREEN if people > 0 else C_LABEL
-    src_col     = C_CYAN if count_src == 'YOLO' else C_ORANGE
+    people    = ds.get('people_count', 0)
+    count_src = ds.get('count_source', 'YOLO').upper()
+    p_col     = C_GREEN if people > 0 else C_LABEL
+    src_col   = C_CYAN if count_src == 'YOLO' else C_ORANGE
     y = _row2(draw, y,
-              '인원',    f'{people}명',                       p_col,
-              '감지',    count_src,                           src_col)
+              '인원',   f'{people}명',                        p_col,
+              '감지',   count_src,                            src_col)
     y = _row2(draw, y,
-              '모션',    f"{ds.get('motion_score', 0.0):.1f}", C_VAL,
-              'MET',    f"{ds.get('met', 1.0):.1f} ({ds.get('met_source','vlm').upper()})", C_VAL)
+              '모션',   f"{ds.get('motion_score', 0.0):.1f}", C_VAL,
+              'MET',   f"{ds.get('met', 1.0):.1f} ({ds.get('met_source','vlm').upper()})", C_VAL)
     y = _row1(draw, y, '활동', ds.get('activity', '-'), C_VAL)
+
+    # 구분선
+    draw.line([(8, y + 4), (PANEL_W - 8, y + 4)], fill=(55, 55, 75), width=1)
+    y += 10
+
+    clo       = ds.get('clo', 1.0)
+    room_sz   = ds.get('room_size', 'medium')
+    room_m2   = ds.get('room_size_m2', 30.0)
+    outerwear = ds.get('outerwear', 'no')
+    heat_src  = ds.get('heat_source', 'no')
+    y = _row2(draw, y,
+              'CLO',    f'{clo:.2f} clo',                     C_VAL,
+              '방 크기', f'{room_sz} ({room_m2:.0f}㎡)',        C_VAL)
+    ow_col   = C_ORANGE if outerwear == 'yes' else C_LABEL
+    hs_col   = C_RED    if heat_src  == 'yes' else C_LABEL
+    y = _row2(draw, y,
+              '아우터',  '착용' if outerwear == 'yes' else '없음', ow_col,
+              '열원',    '감지' if heat_src  == 'yes' else '없음', hs_col)
+    y = _row1(draw, y, '분석', ds.get('last_analysis', '--:--:--'), C_TIME)
     return y
 
 
@@ -280,10 +323,33 @@ def _draw_energy(draw: ImageDraw.Draw, y: int, end_y: int, hvac, em) -> None:
 
 # ── 공개 API ──────────────────────────────────────────────────────────────────
 
-def build(cam_h: int, hvac, sm, em,
+def _draw_env_override(draw: ImageDraw.Draw, y: int,
+                       env: dict, env_vars: list, env_label: dict) -> int:
+    """환경 오버라이드 활성 시 표시되는 섹션"""
+    draw.rectangle([(0, y), (PANEL_W, y + 92)], fill=(30, 20, 45))
+    draw.rectangle([(0, y), (PANEL_W, y + 26)], fill=(110, 40, 110))
+    draw.text((10, y + 5), '  ENV OVERRIDE  [E:OFF  [:prev  ]:next  +/-:조정]',
+              font=_font(11, bold=True), fill=(220, 140, 255))
+    y += 26
+    sel = env_vars[env.get("selected", 0)]
+    for var in env_vars:
+        lbl  = env_label[var]
+        val  = env.get(var, 0.0)
+        unit = "%" if "humid" in var else "°C"
+        is_sel = (var == sel)
+        col  = (255, 220, 80) if is_sel else C_VAL
+        prefix = "▶ " if is_sel else "  "
+        draw.text((10, y + 2), f"{prefix}{lbl}", font=_font(12), fill=col)
+        draw.text((130, y + 2), f"{val}{unit}", font=_font(13, bold=is_sel), fill=col)
+        y += 17
+    return y + 4
+
+
+def build(cam_h: int, hvac, sm,
           out_temp: float, out_humid: float,
           out_weather: str, out_wind: float,
-          ds: dict, manual_ctrl: dict = None) -> np.ndarray:
+          ds: dict, manual_ctrl: dict = None,
+          env_override: dict = None) -> np.ndarray:
     """
     대시보드 패널 생성
 
@@ -301,26 +367,32 @@ def build(cam_h: int, hvac, sm, em,
     Returns:
         np.ndarray: BGR 이미지 (cam_h, PANEL_W, 3)
     """
-    img  = Image.new('RGB', (PANEL_W, cam_h), BG)
+    panel_h = max(cam_h, 620)
+    img  = Image.new('RGB', (PANEL_W, panel_h), BG)
     draw = ImageDraw.Draw(img)
 
     # ── 구분선 (세로) ─────────────────────────────────────────────────────────
     draw.line([(0, 0), (0, cam_h)], fill=(70, 60, 100), width=2)
 
+    _ENV_VARS  = ["indoor_temp", "outdoor_temp", "indoor_humid", "outdoor_humid"]
+    _ENV_LABEL = {"indoor_temp": "실내온도", "outdoor_temp": "실외온도",
+                  "indoor_humid": "실내습도", "outdoor_humid": "실외습도"}
+
     y  = 0
     y  = _draw_header(draw, y)                          # 40 px
-    y  = _draw_outdoor(draw, y,                         # 88 px
-                       out_temp, out_humid, out_weather, out_wind)
+    if env_override and env_override.get("enabled"):
+        y = _draw_env_override(draw, y, env_override, _ENV_VARS, _ENV_LABEL)
+    y  = _draw_outdoor(draw, y,                         # 110 px
+                       out_temp, out_humid, out_weather, out_wind, ds)
     y  = _draw_indoor(draw, y, hvac, ds)                # 88 px
     y  = _draw_hvac(draw, y, hvac, sm, manual_ctrl)      # 90~112 px
     y  = _draw_occupancy(draw, y, ds)                   # 78 px
 
-    energy_h   = 30
     solution_y = y
-    solution_e = cam_h - energy_h
-    _draw_solution(draw, solution_y, solution_e,
-                   sm.state, ds.get('pmv_val', 0.0),
-                   hvac, out_temp, ds.get('people_count', 0))
-    _draw_energy(draw, cam_h - energy_h, cam_h, hvac, em)
+    solution_e = panel_h
+    if solution_e > solution_y:
+        _draw_solution(draw, solution_y, solution_e,
+                       sm.state, ds.get('pmv_val', 0.0),
+                       hvac, out_temp, ds.get('people_count', 0))
 
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)

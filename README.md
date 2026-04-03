@@ -35,7 +35,7 @@
 - **기대효과:** 지연(Latency) 없는 즉각 처리 및 보안 구역에서도 사생활 침해 제로(0)를 보장합니다.
 
 ### ② YOLO + VLM 하이브리드 인지 시스템
-- **차별점:** 인원 수 감지는 YOLOv8n(95%+ 정확도, 10~20fps)이 전담하고, VLM(Qwen2-VL-2B)은 착의량(Clo)·활동 분류(Met)·가방·열원 등 **정성적 공간 맥락 인지**에만 집중합니다. VLM 분석 사이 구간에는 MotionDetector가 프레임 차분으로 실제 움직임 강도를 측정해 MET를 실시간 보정합니다.
+- **차별점:** 인원 수 감지는 YOLOv8n(95%+ 정확도, 10~20fps)이 전담하고, VLM(Qwen2-VL-2B)은 착의량(Clo)·활동 분류(Met)·방 크기·열원 등 **정성적 공간 맥락 인지**에만 집중합니다. VLM 분석 사이 구간에는 MotionDetector가 프레임 차분으로 실제 움직임 강도를 측정해 MET를 실시간 보정합니다.
 - **기대효과:** 각 모델을 적재적소에 배치하여 정확도와 연산 효율을 동시에 최대화합니다.
 
 ### ③ PMV 기반 PID 제어 (정밀 쾌적 제어)
@@ -43,7 +43,7 @@
 - **기대효과:** 오랫동안 추웠던 공간은 적분항이 보정하고, 급격한 온도 변화는 미분항이 억제하여 오버슈트 없이 쾌적 구간에 안착합니다.
 
 ### ④ 시계열 상태 머신 (Context-Aware State Control)
-- **차별점:** EMPTY → ARRIVAL → STEADY → PRE_DEPARTURE 4단계로 제어 모드를 자동 전환합니다. 퇴근 맥락(외투 착용, 가방 소지)은 인원이 남아 있어도 선제 절전을 트리거합니다.
+- **차별점:** EMPTY → ARRIVAL → STEADY → PRE_DEPARTURE 4단계로 제어 모드를 자동 전환합니다. 퇴근 맥락(외투 착용, 인원 감소)은 인원이 남아 있어도 선제 절전을 트리거합니다.
 - **기대효과:** 출근 직후 빠른 냉·난방, 퇴근 전 선제 절전, 빈 공간 자동 OFF로 불필요한 에너지 낭비를 제거합니다.
 
 ### ⑤ 센서 추상화 레이어 (Jetson 이전 용이성)
@@ -66,7 +66,7 @@
     - **솔루션:** VLM이 열원(heat_source) 즉각 인지 → 복사온도(tr) 보정 + 환기 우선 제어.
 - **시나리오 C: 스마트 오피스 트랜지션 (공간 맥락 인지 에너지 절감)**
     - **문제점:** 퇴실 후에야 센서가 반응하여 빈 방에 불필요한 에너지 소비 발생.
-    - **솔루션:** 외투 착용, 가방 정리 등 '퇴근 준비 맥락' 포착 시 PRE_DEPARTURE 상태로 전환하여 공조기를 선제 절전함.
+    - **솔루션:** 외투 착용, 인원 감소 등 '퇴근 준비 맥락' 포착 시 PRE_DEPARTURE 상태로 전환하여 공조기를 선제 절전함.
 
 ---
 
@@ -85,13 +85,13 @@ graph TD
     subgraph "2. 병렬 인지 레이어"
         B1 --> C1["YOLOv8n\n인원 수 감지\n(매 5프레임, 10~20fps)"]
         B1 --> C2["MotionDetector\n프레임 차분 움직임 강도\n(매 프레임)"]
-        B1 --> C3["VLM Background Thread\nQwen2-VL-2B\n착의량·활동·가방·열원\n(30초 주기)"]
+        B1 --> C3["VLM Background Thread\nQwen2-VL-2B\n착의량·활동·방크기·열원\n(30초 주기)"]
     end
 
     subgraph "3. 융합 및 PMV 계산"
         C1 --> D1[인원 수]
         C2 --> D2[motion_score → MET 보정]
-        C3 --> D3["clo, met, bags\nheat_source, activity"]
+        C3 --> D3["clo, met, room_size\nheat_source, activity"]
         B2 --> D4[실외 온습도]
         B3 --> D5[실내 온습도]
 
@@ -117,19 +117,21 @@ graph TD
 
 | 파일 | 역할 |
 |------|------|
-| `main.py` | 메인 루프, 스레딩 조율, 키 입력 처리 |
-| `vlm_processor.py` | Qwen2-VL-2B 추론 — clo/met/bags/heat_source/activity 추출 |
+| `main.py` | 메인 루프, 스레딩 조율, 수동/자동 키 입력 처리 |
+| `vlm_processor.py` | Qwen2-VL-2B 추론 — clo/met/room_size/heat_source/activity 추출 |
 | `yolo_detector.py` | YOLOv8n 인원 감지 — 매 5프레임, YOLO 불가 시 -1 반환 |
 | `motion_detector.py` | 프레임 차분 + 롤링 평균 → motion_score → MET 보정 |
 | `pid_controller.py` | PMV 오차 기반 PID 제어 (kp=0.8, ki=0.05, kd=0.3, deadband=0.12) |
 | `thermal_engine.py` | ISO 7730 PMV 계산 엔진 |
-| `state_machine.py` | 4단계 상태 전이 + 퇴근 맥락 점수 |
+| `state_machine.py` | 4단계 상태 전이 + 퇴근 맥락 점수 (최대 75점) |
 | `hvac_simulator.py` | 공조기 시뮬레이터 (난방/냉방 물리 모델, 기본 25°C 난방) |
 | `sensor_interface.py` | 온습도 센서 추상화 (simulate / dht22 / bme280) |
 | `energy_monitor.py` | 소비전력 누적 + 베이스라인 비교, 쾌적율 산출 |
-| `weather_service.py` | OpenWeatherMap API 기상 데이터 취득 (60초 주기) |
-| `dashboard.py` | PIL 기반 사이드 패널 UI (한글 폰트 자동 감지) |
+| `weather_service.py` | 기상청(KMA) 초단기실황 API — 온도·습도·날씨·풍속 취득 (60초 주기) |
+| `air_quality_service.py` | 에어코리아 API — PM10/PM2.5/KHAI 취득 (60초 주기) |
+| `dashboard.py` | PIL 기반 사이드 패널 UI (실외환경·PM2.5·수동제어 표시, 한글 폰트 자동 감지) |
 | `convert_tensorrt.py` | Jetson TRT 변환 유틸리티 (YOLO FP16 / Qwen2-VL INT4) |
+| `virtual_ac.py` | 고급 물리 기반 AC 시뮬레이터 (RoomThermalModel + CompressorUnit + WindowAdvisor) — 향후 통합 예정 |
 
 ### 6.3 데이터 파이프라인
 
@@ -138,7 +140,10 @@ graph TD
   ├─ YOLOv8n  (매 5프레임) → 인원 수
   ├─ MotionDetector (매 프레임) → motion_score → MET 보정
   └─ VLM Thread (30초 주기)
-       └─ Qwen2-VL-2B → clo / met / bags / heat_source / activity
+       └─ Qwen2-VL-2B → clo / met / room_size / heat_source / activity
+
+기상청 API (60초 주기) → 실외 온도·습도·날씨·풍속
+에어코리아 API (60초 주기) → PM10 / PM2.5 / 통합대기환경지수(KHAI)
 
 융합 → StateManager 갱신 → ThermalEngine PMV 계산
   → PIDController (STEADY) 또는 규칙 기반 (ARRIVAL/PRE_DEPARTURE/EMPTY)
@@ -172,10 +177,22 @@ python main.py --interval 10
 python convert_tensorrt.py --all
 ```
 
+**환경 변수 설정 (`.env` 파일):**
+```
+WEATHER_API_KEY=기상청_API_키
+AIR_QUALITY_API_KEY=에어코리아_API_키
+AIR_QUALITY_STATION=장림동
+```
+
 **키 입력:**
 - `s` — 즉시 VLM 분석 실행
 - `w` — 창문 열기/닫기 토글
 - `q` — 종료 및 에너지 요약 출력
+- `m` — 수동/자동 모드 전환
+  - (수동 모드) `p` — 전원 ON/OFF
+  - (수동 모드) `c` / `h` — 냉방 / 난방 전환
+  - (수동 모드) `+` / `-` — 설정 온도 ±1°C
+  - (수동 모드) `f` — 팬 속도 순환 (1→2→3→1)
 
 ---
 

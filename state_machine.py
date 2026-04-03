@@ -23,18 +23,18 @@ class StateManager:
     PRE_DEPARTURE → STEADY        : 맥락 점수 < DEPARTURE_SCORE_OFF (오탐 복귀)
     ANY           → EMPTY         : 인원 0 상태 EMPTY_CONFIRM_SEC 지속
 
-    ── 퇴근 맥락 점수 (0~100) ────────────────────────────────────────────────
+    ── 퇴근 맥락 점수 (0~75) ────────────────────────────────────────────────
     인원 감소    : +30  (이전 분석 대비 count 감소)
     아우터 착용  : +25  (VLM outerwear = 'yes')
-    가방 소지    : +25  (VLM bags = 'yes')
     기립 자세    : +10  (VLM activity = 'standing')
     퇴근 시간대  : +10  (설정 퇴근 시각 ±1시간)
+    최대 점수    : 75점
     """
 
     ARRIVAL_DURATION_SEC = 600   # 도착 후 강제 제어 지속 시간 (10분)
     EMPTY_CONFIRM_SEC    = 30    # 인원 0 확인 후 EMPTY 전환까지 대기 (30초)
-    DEPARTURE_SCORE_ON   = 70    # PRE_DEPARTURE 진입 임계값
-    DEPARTURE_SCORE_OFF  = 40    # STEADY 복귀 임계값 (히스테리시스)
+    DEPARTURE_SCORE_ON   = 55    # PRE_DEPARTURE 진입 임계값
+    DEPARTURE_SCORE_OFF  = 30    # STEADY 복귀 임계값 (히스테리시스)
 
     def __init__(self, work_start_hour: int = 9, work_end_hour: int = 18):
         self.state             = SystemState.EMPTY
@@ -49,7 +49,7 @@ class StateManager:
     # ── 공개 API ──────────────────────────────────────────────────────────────
 
     def update(self, people_count: int, outerwear: str = 'no',
-               activity: str = 'sitting', bags: str = 'no') -> SystemState:
+               activity: str = 'sitting') -> SystemState:
         """
         VLM 분석 결과를 받아 상태를 갱신하고 현재 상태를 반환합니다.
 
@@ -57,7 +57,6 @@ class StateManager:
             people_count : VLM 감지 인원 수
             outerwear    : 아우터 착용 여부 ('yes'|'no')
             activity     : 활동 분류 ('sitting'|'standing'|'walking'|...)
-            bags         : 가방 소지 여부 ('yes'|'no')
 
         Returns:
             SystemState: 갱신된 현재 상태
@@ -85,7 +84,7 @@ class StateManager:
 
         elif self.state == SystemState.STEADY:
             self._departure_score = self._compute_departure_score(
-                people_count, outerwear, activity, bags, now
+                people_count, outerwear, activity, now
             )
             if self._departure_score >= self.DEPARTURE_SCORE_ON:
                 self._transition(SystemState.PRE_DEPARTURE)
@@ -95,7 +94,7 @@ class StateManager:
                 self._transition(SystemState.EMPTY)
             else:
                 self._departure_score = self._compute_departure_score(
-                    people_count, outerwear, activity, bags, now
+                    people_count, outerwear, activity, now
                 )
                 if self._departure_score < self.DEPARTURE_SCORE_OFF:
                     self._transition(SystemState.STEADY)  # 오탐 복귀
@@ -128,17 +127,15 @@ class StateManager:
             self._departure_score = 0
 
     def _compute_departure_score(self, people_count: int, outerwear: str,
-                                  activity: str, bags: str, now: float) -> int:
+                                  activity: str, now: float) -> int:
         score = 0
         if people_count < self._prev_people_count:
             score += 30   # 인원 감소 추세
         if outerwear == 'yes':
             score += 25   # 외투 착용
-        if bags == 'yes':
-            score += 25   # 가방 소지
         if activity == 'standing':
             score += 10   # 기립 자세
         hour = datetime.datetime.fromtimestamp(now).hour
         if self.work_end_hour - 1 <= hour <= self.work_end_hour + 1:
             score += 10   # 퇴근 시간대
-        return min(score, 100)
+        return min(score, 75)

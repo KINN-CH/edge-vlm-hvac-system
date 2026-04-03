@@ -26,7 +26,7 @@ class VLMProcessor:
       activity    : 활동 분류 → met 변환
 
     맥락 신호:
-      bags        : 가방 소지 → 퇴근 맥락 점수 (+25)
+      room_size   : 공간 크기 ('small'|'medium'|'large') → 15/30/60 m²
       heat_source : 조리기구 등 열원 → 복사온도(tr) 보정 및 환기 우선
 
     ※ 인원 수(people)는 YOLODetector가 전담 — VLM 프롬프트에서 제거됨.
@@ -35,6 +35,8 @@ class VLMProcessor:
     # PMV 입력 매핑 테이블 (ISO 7730:2005 근거)
     CLO_BASE  = {'short': 0.5, 'long': 1.0}
     CLO_OUTER = 0.3   # 아우터 착용 시 추가 착의량
+
+    ROOM_SIZE_MAP = {'small': 15.0, 'medium': 30.0, 'large': 60.0}  # m²
 
     MET_MAP = {
         'lying':      0.8,   # 누워있음 (수면/휴식)
@@ -102,7 +104,8 @@ class VLMProcessor:
             dict: {
                 'clo': float,          착의량 (ISO 7730)
                 'met': float,          대사율 (ISO 7730)
-                'bags': str,           가방 소지 ('yes'|'no')
+                'room_size': str,      공간 크기 ('small'|'medium'|'large')
+                'room_size_m2': float, 공간 면적 (m²)
                 'heat_source': str,    열원 존재 ('yes'|'no')
                 'outerwear': str,      아우터 착용 ('yes'|'no')
                 'activity': str,       활동 분류 원문
@@ -123,7 +126,7 @@ class VLMProcessor:
             "{'sleeves': 'long'|'short', "
             "'outerwear': 'yes'|'no', "
             "'activity': 'lying'|'sitting'|'standing'|'walking'|'cooking'|'exercising', "
-            "'bags': 'yes'|'no', "
+            "'room_size': 'small'|'medium'|'large', "
             "'heat_source': 'yes'|'no'}"
         )
 
@@ -168,16 +171,19 @@ class VLMProcessor:
             if data.get('outerwear') == 'yes':
                 clo += self.CLO_OUTER
 
-            activity = data.get('activity', 'standing')
-            met      = self.MET_MAP.get(activity, self.MET_DEFAULT)
+            activity    = data.get('activity', 'standing')
+            met         = self.MET_MAP.get(activity, self.MET_DEFAULT)
+            room_size   = data.get('room_size', 'medium')
+            room_size_m2 = self.ROOM_SIZE_MAP.get(room_size, 30.0)
 
             return {
-                "clo":         round(clo, 2),
-                "met":         met,
-                "bags":        data.get('bags', 'no'),
-                "heat_source": data.get('heat_source', 'no'),
-                "outerwear":   data.get('outerwear', 'no'),
-                "activity":    activity,
+                "clo":          round(clo, 2),
+                "met":          met,
+                "room_size":    room_size,
+                "room_size_m2": room_size_m2,
+                "heat_source":  data.get('heat_source', 'no'),
+                "outerwear":    data.get('outerwear', 'no'),
+                "activity":     activity,
             }
 
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
