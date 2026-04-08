@@ -1,0 +1,45 @@
+# ─── Jetson / EmVision ON8 (Ubuntu 20.04 L4T, Python 3.8, CUDA 11.4) ──────────
+#
+# 사전 조건:
+#   1. Jetpack 5.x 설치 완료
+#   2. python3-opencv 는 apt 로 설치 (아래 Step 2 참고)
+#
+# Step 1 — 가상환경 생성
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#
+# Step 2 — PyTorch (Jetpack 전용, pip 버전 사용 금지)
+#   pip install torch torchvision \
+#     --index-url https://developer.download.nvidia.com/compute/redist/jp/v502
+#
+# Step 3 — 이 파일로 나머지 설치
+#   pip install -r requirements_jetson.txt
+#
+# Step 4 — CUDA 확인
+#   python3 -c "import torch; print(torch.cuda.is_available())"
+#   → True 이면 성공
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+# VLM
+transformers>=4.45.0
+qwen-vl-utils
+accelerate
+
+# 이미지/영상
+pillow
+
+# 데이터
+pandas
+numpy
+
+# 통신
+requests
+python-dotenv
+
+# YOLO (인원 감지)
+ultralytics
+
+# ── 주의 ──────────────────────────────────────────────────────────────────────
+# opencv-python 은 apt 패키지(python3-opencv)와 충돌하므로 pip 설치 금지.
+# torch/torchvision 은 위 Step 2 방법으로만 설치.

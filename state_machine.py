@@ -117,7 +117,7 @@ class StateManager:
     def _transition(self, new_state: SystemState):
         if new_state == self.state:
             return
-        print(f"🔄 [State] {self.state.value} → {new_state.value}")
+        print(f"[State] {self.state.value} -> {new_state.value}")
         self.state = new_state
         if new_state == SystemState.ARRIVAL:
             self._arrival_time    = time.time()

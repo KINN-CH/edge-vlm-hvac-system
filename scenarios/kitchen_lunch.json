@@ -1,0 +1,94 @@
+{
+  "name": "주방 화구 사용 시나리오",
+  "description": "소규모 주방(15m²). 점심·저녁 조리 시 화구 복사열(TR +4°C 보정)이 PMV에 미치는 영향과 창문 환기 솔루션 발동 여부 검증. 낮 23°C → 저녁 18°C 외기 변화 포함.",
+  "room_size_m2": 15.0,
+  "initial_indoor_temp": 20.0,
+  "initial_indoor_humid": 55.0,
+  "outdoor": {
+    "temp": 20.0,
+    "humid": 60.0
+  },
+  "timeline": [
+    {
+      "start": "00:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.7,
+      "outdoor_temp": 16.0,
+      "heat_source": false,
+      "note": "공실 야간 — 선선함"
+    },
+    {
+      "start": "06:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.7,
+      "outdoor_temp": 15.0,
+      "heat_source": false,
+      "note": "새벽 최저 기온"
+    },
+    {
+      "start": "10:00",
+      "people": 1,
+      "met": 1.2,
+      "clo": 0.5,
+      "outdoor_temp": 20.0,
+      "heat_source": false,
+      "note": "조리 준비 — 화구 미사용"
+    },
+    {
+      "start": "11:00",
+      "people": 2,
+      "met": 2.0,
+      "clo": 0.5,
+      "outdoor_temp": 22.0,
+      "heat_source": true,
+      "note": "점심 조리 — 화구 ON, 복사열 발생, 낮 최고 기온"
+    },
+    {
+      "start": "13:30",
+      "people": 1,
+      "met": 1.2,
+      "clo": 0.5,
+      "outdoor_temp": 23.0,
+      "heat_source": false,
+      "note": "조리 종료 — 화구 OFF, 뒷정리"
+    },
+    {
+      "start": "15:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 22.0,
+      "heat_source": false,
+      "note": "오후 공실"
+    },
+    {
+      "start": "17:00",
+      "people": 2,
+      "met": 2.0,
+      "clo": 0.5,
+      "outdoor_temp": 19.0,
+      "heat_source": true,
+      "note": "저녁 조리 — 화구 ON. 외기 냉각으로 창문 환기 솔루션 기대"
+    },
+    {
+      "start": "19:30",
+      "people": 1,
+      "met": 1.2,
+      "clo": 0.7,
+      "outdoor_temp": 17.0,
+      "heat_source": false,
+      "note": "저녁 조리 종료 — 외기 하강"
+    },
+    {
+      "start": "21:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.7,
+      "outdoor_temp": 15.0,
+      "heat_source": false,
+      "note": "마감"
+    }
+  ]
+}

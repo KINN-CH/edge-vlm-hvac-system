@@ -1,0 +1,112 @@
+{
+  "name": "여름철 사무실 시나리오",
+  "description": "한여름 폭염 조건에서 일반 사무실 하루 운영 패턴. 새벽 28°C → 정오 35°C → 저녁 29°C 기온 변화 포함.",
+  "room_size_m2": 30.0,
+  "initial_indoor_temp": 27.0,
+  "initial_indoor_humid": 65.0,
+  "outdoor": {
+    "temp": 28.0,
+    "humid": 72.0
+  },
+  "timeline": [
+    {
+      "start": "00:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 27.0,
+      "heat_source": false,
+      "note": "공실 새벽 — 야간 복사냉각으로 비교적 선선"
+    },
+    {
+      "start": "04:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 26.0,
+      "heat_source": false,
+      "note": "최저 기온 구간"
+    },
+    {
+      "start": "07:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 29.0,
+      "heat_source": false,
+      "note": "일출 후 기온 상승 시작"
+    },
+    {
+      "start": "09:00",
+      "people": 6,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 32.0,
+      "heat_source": false,
+      "note": "출근 — 여름 반팔, 착석 사무 작업"
+    },
+    {
+      "start": "11:00",
+      "people": 6,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 34.0,
+      "heat_source": false,
+      "note": "오전 막판 — 기온 급상승"
+    },
+    {
+      "start": "12:00",
+      "people": 2,
+      "met": 1.2,
+      "clo": 0.5,
+      "outdoor_temp": 35.0,
+      "heat_source": false,
+      "note": "정오 피크 — 대부분 외출, 최고 기온"
+    },
+    {
+      "start": "13:00",
+      "people": 6,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 35.0,
+      "heat_source": false,
+      "note": "오후 — 풀 인원 복귀, 폭염 지속"
+    },
+    {
+      "start": "15:00",
+      "people": 6,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 33.0,
+      "heat_source": false,
+      "note": "오후 중반 — 기온 소폭 하강"
+    },
+    {
+      "start": "17:00",
+      "people": 6,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 31.0,
+      "heat_source": false,
+      "note": "퇴근 임박 — 기온 하강 중"
+    },
+    {
+      "start": "18:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 29.0,
+      "heat_source": false,
+      "note": "퇴근 — 공실, AC 자동 꺼짐"
+    },
+    {
+      "start": "21:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 27.0,
+      "heat_source": false,
+      "note": "야간 — 기온 하강"
+    }
+  ]
+}
