@@ -43,12 +43,14 @@ class PIDController:
         self._prev_error = 0.0
         self._last_time: Optional[float] = None
 
-    def compute(self, pmv_val: float) -> float:
+    def compute(self, pmv_val: float, dt: Optional[float] = None) -> float:
         """
         PID 출력 계산
 
         Args:
             pmv_val : 현재 PMV 값
+            dt      : 경과 시간(초). None이면 time.time() 기반 자동 계산.
+                      시나리오 러너처럼 실시간이 아닌 환경에서는 명시적으로 전달.
 
         Returns:
             float : 제어 출력 [-3.0, +3.0]
@@ -56,9 +58,10 @@ class PIDController:
         """
         error = self.PMV_TARGET - pmv_val
 
-        now = time.time()
-        dt  = max(0.1, now - self._last_time) if self._last_time else 1.0
-        self._last_time = now
+        if dt is None:
+            now = time.time()
+            dt  = max(0.1, now - self._last_time) if self._last_time else 1.0
+            self._last_time = now
 
         # 적분항 (Anti-windup)
         self._integral += error * dt

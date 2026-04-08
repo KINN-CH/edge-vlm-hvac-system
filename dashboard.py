@@ -30,7 +30,6 @@ C_HEAT    = (255, 148,  55)   # 난방 모드
 C_COOL    = ( 72, 165, 255)   # 냉방 모드
 C_GOLD    = (255, 222,  88)   # 솔루션 텍스트
 C_CYAN    = ( 95, 215, 208)   # 날씨 정보
-C_ENERGY  = (150, 215, 255)   # 에너지 정보
 C_TIME    = (140, 138, 170)   # 타임스탬프
 
 # ── 폰트 캐시 ─────────────────────────────────────────────────────────────────
@@ -307,18 +306,6 @@ def _draw_solution(draw: ImageDraw.Draw, y: int, end_y: int,
         draw.text((12, y + 3), f'▶  {line}', font=_font(12), fill=C_GOLD)
         y += 22
     return end_y
-
-
-def _draw_energy(draw: ImageDraw.Draw, y: int, end_y: int, hvac, em) -> None:
-    draw.rectangle([(0, y), (PANEL_W, end_y)], fill=(28, 32, 45))
-    power_w  = em.get_current_power_w(hvac.is_on, hvac.fan_speed)
-    save_pct = em.get_savings_pct()
-    kwh      = em.get_energy_kwh()
-    comfort  = em.get_comfort_rate()
-
-    txt = (f'전력 {power_w}W   절약 {save_pct:.1f}%   '
-           f'{kwh:.3f}kWh   쾌적율 {comfort:.1f}%')
-    draw.text((8, y + 7), txt, font=_font(11), fill=C_ENERGY)
 
 
 # ── 공개 API ──────────────────────────────────────────────────────────────────

@@ -1,0 +1,85 @@
+{
+  "name": "헬스장 오전 시나리오",
+  "description": "이른 아침 헬스장. 운동 중 높은 대사량(MET 3.0)과 대인원이 복합적으로 체열을 발생시키는 환경. 새벽 12°C → 낮 22°C 외기 변화로 냉방 부하가 시간대별로 달라짐.",
+  "room_size_m2": 60.0,
+  "initial_indoor_temp": 18.0,
+  "initial_indoor_humid": 52.0,
+  "outdoor": {
+    "temp": 14.0,
+    "humid": 55.0
+  },
+  "timeline": [
+    {
+      "start": "00:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 12.0,
+      "heat_source": false,
+      "note": "야간 공실 — 선선한 새벽"
+    },
+    {
+      "start": "06:00",
+      "people": 2,
+      "met": 3.0,
+      "clo": 0.3,
+      "outdoor_temp": 14.0,
+      "heat_source": false,
+      "note": "이른 이용자 — 운동복(clo 0.3), 고강도 운동(MET 3.0)"
+    },
+    {
+      "start": "07:00",
+      "people": 10,
+      "met": 3.0,
+      "clo": 0.3,
+      "outdoor_temp": 16.0,
+      "heat_source": false,
+      "note": "피크 타임 — 최다 인원, 격렬한 운동. 체열 + 발한 증가"
+    },
+    {
+      "start": "09:00",
+      "people": 5,
+      "met": 1.5,
+      "clo": 0.3,
+      "outdoor_temp": 18.0,
+      "heat_source": false,
+      "note": "피크 이후 — 인원 감소, 유산소→스트레칭(보행 수준)"
+    },
+    {
+      "start": "11:00",
+      "people": 2,
+      "met": 1.5,
+      "clo": 0.5,
+      "outdoor_temp": 21.0,
+      "heat_source": false,
+      "note": "한산 — 가벼운 이용자, 외기 온도 상승"
+    },
+    {
+      "start": "13:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 23.0,
+      "heat_source": false,
+      "note": "점심 공실 — 가장 더운 시간대"
+    },
+    {
+      "start": "17:00",
+      "people": 8,
+      "met": 3.0,
+      "clo": 0.3,
+      "outdoor_temp": 21.0,
+      "heat_source": false,
+      "note": "퇴근 후 저녁 피크 — 외기 하강 중"
+    },
+    {
+      "start": "20:00",
+      "people": 0,
+      "met": 1.0,
+      "clo": 0.5,
+      "outdoor_temp": 17.0,
+      "heat_source": false,
+      "note": "마감 — 기온 하강"
+    }
+  ]
+}
