@@ -55,7 +55,7 @@ class MotionDetector:
         """
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        if self._prev_gray is None:
+        if self._prev_gray is None or self._prev_gray.shape != gray.shape:
             self._prev_gray = gray
             return 0.0
 

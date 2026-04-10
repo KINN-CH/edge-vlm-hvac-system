@@ -31,7 +31,7 @@ class StateManager:
     최대 점수    : 75점
     """
 
-    ARRIVAL_DURATION_SEC = 600   # 도착 후 강제 제어 지속 시간 (10분)
+    ARRIVAL_DURATION_SEC = 60    # 도착 후 강제 제어 지속 시간 (1분, 개발환경)
     EMPTY_CONFIRM_SEC    = 30    # 인원 0 확인 후 EMPTY 전환까지 대기 (30초)
     DEPARTURE_SCORE_ON   = 55    # PRE_DEPARTURE 진입 임계값
     DEPARTURE_SCORE_OFF  = 30    # STEADY 복귀 임계값 (히스테리시스)

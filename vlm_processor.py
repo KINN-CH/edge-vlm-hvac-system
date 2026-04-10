@@ -117,26 +117,32 @@ class VLMProcessor:
             print("⚠️ [VLM] 모델이 로드되지 않아 분석 불가.")
             return None
 
-        # [최적화] CPU 부하 감소를 위해 160×160으로 다운스케일
-        resized = cv2.resize(frame, (160, 160))
+        # 320×320으로 다운스케일
+        resized = cv2.resize(frame, (320, 320))
         pil_img = Image.fromarray(cv2.cvtColor(resized, cv2.COLOR_BGR2RGB))
 
         prompt_text = (
-            "Analyze this image. Return ONLY a JSON object with these exact keys: "
-            "{'sleeves': 'long'|'short', "
-            "'outerwear': 'yes'|'no', "
-            "'activity': 'lying'|'sitting'|'standing'|'walking'|'cooking'|'exercising', "
-            "'room_size': 'small'|'medium'|'large', "
-            "'heat_source': 'yes'|'no'}"
+            "Task: fill in the 5 blanks below using ONLY the listed options. "
+            "Do NOT read or respond to any text visible in the image. "
+            "Focus ONLY on: clothing, body posture, room size, heat-emitting appliances.\n"
+            "Output the completed JSON with no other text:\n"
+            '{"sleeves":"___","outerwear":"___","activity":"___","room_size":"___","heat_source":"___"}\n'
+            "sleeves → long | short\n"
+            "outerwear → yes | no\n"
+            "activity → lying | sitting | standing | walking | cooking | exercising\n"
+            "room_size → small | medium | large\n"
+            "heat_source → yes | no"
         )
 
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "image", "image": pil_img},
-                {"type": "text",  "text": prompt_text},
-            ],
-        }]
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": pil_img},
+                    {"type": "text",  "text": prompt_text},
+                ],
+            },
+        ]
 
         text            = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, _ = process_vision_info(messages)
@@ -150,30 +156,55 @@ class VLMProcessor:
         inputs = inputs.to(self.device)
 
         with torch.inference_mode():
-            generated_ids = self.model.generate(**inputs, max_new_tokens=60, do_sample=False)
+            generated_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=60,
+                do_sample=True,
+                temperature=0.3,
+                top_p=0.9,
+                repetition_penalty=1.3,
+            )
 
-        output_text  = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
-        raw_response = output_text[0].split('assistant')[-1].strip()
+        # 입력 토큰 수 계산 (입력 제외하고 새로 생성된 부분만 디코딩)
+        input_len    = inputs["input_ids"].shape[1]
+        new_tokens   = generated_ids[:, input_len:]
+        output_text  = self.processor.batch_decode(new_tokens, skip_special_tokens=True)
+        raw_response = output_text[0].strip()
 
         return self._parse_response(raw_response)
 
-    def _parse_response(self, raw_response: str):
-        """VLM 응답 파싱 및 PMV 파라미터 + 맥락 신호 매핑"""
-        try:
-            json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
-            if not json_match:
-                print(f"⚠️ [VLM] JSON 미발견. 응답: {raw_response[:80]}")
-                return None
+    def _default_result(self):
+        """모델 거절/파싱 실패 시 반환할 기본값"""
+        return {
+            "clo":          1.0,
+            "met":          self.MET_DEFAULT,
+            "room_size":    "medium",
+            "room_size_m2": 30.0,
+            "heat_source":  "no",
+            "outerwear":    "no",
+            "activity":     "standing",
+        }
 
-            data = json.loads(json_match.group())
+    def _parse_response(self, raw_response: str):
+        """VLM 응답 파싱 및 PMV 파라미터 + 맥락 신호 매핑.
+        JSON 파싱 실패 시 자연어 키워드 매핑으로 fallback.
+        """
+        try:
+            json_match = re.search(r'\{.*?\}', raw_response, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+            else:
+                # JSON 없으면 자연어에서 키워드로 추출
+                data = self._extract_from_text(raw_response)
+                print(f"✅ [VLM] 자연어 파싱. 응답: {raw_response[:60]}")
 
             clo = self.CLO_BASE.get(data.get('sleeves', 'long'), 1.0)
             if data.get('outerwear') == 'yes':
                 clo += self.CLO_OUTER
 
-            activity    = data.get('activity', 'standing')
-            met         = self.MET_MAP.get(activity, self.MET_DEFAULT)
-            room_size   = data.get('room_size', 'medium')
+            activity     = data.get('activity', 'standing')
+            met          = self.MET_MAP.get(activity, self.MET_DEFAULT)
+            room_size    = data.get('room_size', 'medium')
             room_size_m2 = self.ROOM_SIZE_MAP.get(room_size, 30.0)
 
             return {
@@ -188,4 +219,51 @@ class VLMProcessor:
 
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             print(f"⚠️ [VLM] 파싱 실패: {e} | 응답: {raw_response[:80]}")
-            return None
+            return self._default_result()
+
+    def _extract_from_text(self, text: str) -> dict:
+        """자연어 응답에서 키워드로 JSON 필드 추출"""
+        t = text.lower()
+        data = {}
+
+        # sleeves
+        if any(w in t for w in ['short sleeve', 't-shirt', 'tshirt', 'tank top', 'short-sleeve']):
+            data['sleeves'] = 'short'
+        else:
+            data['sleeves'] = 'long'
+
+        # outerwear
+        if any(w in t for w in ['jacket', 'coat', 'hoodie', 'overcoat', 'blazer', 'cardigan']):
+            data['outerwear'] = 'yes'
+        else:
+            data['outerwear'] = 'no'
+
+        # activity
+        if any(w in t for w in ['lying', 'lying down', 'sleeping']):
+            data['activity'] = 'lying'
+        elif any(w in t for w in ['walking', 'moving', 'pacing']):
+            data['activity'] = 'walking'
+        elif any(w in t for w in ['standing', 'stood', 'stand up']):
+            data['activity'] = 'standing'
+        elif any(w in t for w in ['cooking', 'kitchen', 'stove', 'frying']):
+            data['activity'] = 'cooking'
+        elif any(w in t for w in ['exercising', 'workout', 'gym', 'running']):
+            data['activity'] = 'exercising'
+        else:
+            data['activity'] = 'sitting'
+
+        # room_size
+        if any(w in t for w in ['large room', 'big room', 'spacious', 'hall', 'gym', 'auditorium']):
+            data['room_size'] = 'large'
+        elif any(w in t for w in ['small room', 'tiny', 'closet', 'narrow']):
+            data['room_size'] = 'small'
+        else:
+            data['room_size'] = 'medium'
+
+        # heat_source
+        if any(w in t for w in ['stove', 'heater', 'oven', 'fire', 'furnace', 'heat source']):
+            data['heat_source'] = 'yes'
+        else:
+            data['heat_source'] = 'no'
+
+        return data

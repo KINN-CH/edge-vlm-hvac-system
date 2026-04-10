@@ -61,10 +61,16 @@ class AirQualityService:
 
             item = items[0]
 
-            # 값 파싱 (문자 → 숫자 변환)
-            self.pm10 = int(item.get("pm10Value", 0))
-            self.pm25 = int(item.get("pm25Value", 0))
-            self.khai = int(item.get("khaiValue", 0))
+            # 값 파싱 (문자 → 숫자 변환, '-' 또는 빈값은 이전 값 유지)
+            def _to_int(val, fallback):
+                try:
+                    return int(val)
+                except (TypeError, ValueError):
+                    return fallback
+
+            self.pm10 = _to_int(item.get("pm10Value"), self.pm10)
+            self.pm25 = _to_int(item.get("pm25Value"), self.pm25)
+            self.khai = _to_int(item.get("khaiValue"), self.khai)
 
         except requests.exceptions.HTTPError as e:
             print(f"🌫 [Air] HTTP 오류: {e}")
