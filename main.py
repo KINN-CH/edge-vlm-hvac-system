@@ -1,5 +1,6 @@
 import cv2
 import os
+import platform
 import queue
 import threading
 import time
@@ -225,7 +226,12 @@ def main(analysis_interval: int = 30):
     cv2.putText(dummy_frame, "No Camera Available", (50, 100),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
 
-    cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+    # macOS: CAP_AVFOUNDATION 백엔드 사용 (권한 안정성)
+    # Linux/Jetson: 기본 백엔드 사용
+    if platform.system() == "Darwin":
+        cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+    else:
+        cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("카메라를 열 수 없습니다. 시뮬레이션 모드로 전환합니다.")
         use_camera = False
@@ -241,7 +247,7 @@ def main(analysis_interval: int = 30):
         if use_camera:
             print("카메라가 성공적으로 연결되었습니다.")
         else:
-            print("카메라 프레임 읽기 실패. 시스템 설정 > 개인정보 > 카메라 권한을 확인하세요.")
+            print("카메라 프레임 읽기 실패. 카메라 권한을 확인하세요.")
             cap.release()
 
     # ── 스레드 설정 ───────────────────────────────────────────────────────────
