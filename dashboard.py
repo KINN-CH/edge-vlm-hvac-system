@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 from state_machine import SystemState
 
 # ── 패널 크기 ─────────────────────────────────────────────────────────────────
-PANEL_W = 390
+PANEL_W = 680
 
 # ── 색상 팔레트 (RGB) ─────────────────────────────────────────────────────────
 BG        = ( 22,  22,  32)   # 전체 배경
@@ -102,29 +102,26 @@ def _temp_color(temp: float, is_outdoor: bool = True) -> tuple:
 # ── 섹션 드로잉 헬퍼 ──────────────────────────────────────────────────────────
 
 def _sect_header(draw: ImageDraw.Draw, y: int, title: str) -> int:
-    """섹션 헤더 바 그리기. 다음 y 반환."""
-    draw.rectangle([(0, y), (PANEL_W, y + 26)], fill=BG_HDR)
-    draw.text((10, y + 5), title, font=_font(13, bold=True), fill=C_TITLE)
-    return y + 26
+    draw.rectangle([(0, y), (PANEL_W, y + 40)], fill=BG_HDR)
+    draw.text((14, y + 8), title, font=_font(19, bold=True), fill=C_TITLE)
+    return y + 40
 
 
 def _row2(draw: ImageDraw.Draw, y: int,
           lbl1: str, val1: str, col1: tuple,
           lbl2: str, val2: str, col2: tuple) -> int:
-    """한 줄에 라벨+값 2쌍 그리기"""
-    draw.text(( 10, y + 2), lbl1, font=_font(12), fill=C_LABEL)
-    draw.text(( 65, y + 2), val1, font=_font(13, bold=True), fill=col1)
-    draw.text((200, y + 2), lbl2, font=_font(12), fill=C_LABEL)
-    draw.text((255, y + 2), val2, font=_font(13, bold=True), fill=col2)
-    return y + 22
+    draw.text(( 14, y + 4), lbl1, font=_font(17), fill=C_LABEL)
+    draw.text((100, y + 4), val1, font=_font(19, bold=True), fill=col1)
+    draw.text((350, y + 4), lbl2, font=_font(17), fill=C_LABEL)
+    draw.text((440, y + 4), val2, font=_font(19, bold=True), fill=col2)
+    return y + 34
 
 
 def _row1(draw: ImageDraw.Draw, y: int,
           lbl: str, val: str, col: tuple = None) -> int:
-    """한 줄에 라벨+값 1쌍 그리기"""
-    draw.text((10, y + 2), lbl, font=_font(12), fill=C_LABEL)
-    draw.text((65, y + 2), val, font=_font(13), fill=col or C_VAL)
-    return y + 22
+    draw.text((14, y + 4), lbl, font=_font(17), fill=C_LABEL)
+    draw.text((100, y + 4), val, font=_font(19), fill=col or C_VAL)
+    return y + 34
 
 
 # ── 솔루션 텍스트 생성 ────────────────────────────────────────────────────────
@@ -132,40 +129,47 @@ def _row1(draw: ImageDraw.Draw, y: int,
 def _get_solution(state: SystemState, pmv: float, hvac,
                   out_temp: float, people: int) -> list:
     """현재 상황에 맞는 솔루션 2줄 반환"""
+    mode_str = "난방" if hvac.mode == 'heat' else "냉방"
+    on_str   = "ON" if hvac.is_on else "OFF"
+
     if state == SystemState.EMPTY:
         return ["공실 감지 — 에어컨 OFF", "에너지 절약 대기 모드"]
-
-    if state == SystemState.ARRIVAL:
-        mode_str = "난방" if hvac.mode == 'heat' else "냉방"
-        return [
-            f"도착 감지 — {mode_str} 강화 (Fan {hvac.fan_speed})",
-            f"실내 {hvac.indoor_temp:.1f}°C → 목표 {hvac.target_temp:.0f}°C",
-        ]
 
     if state == SystemState.PRE_DEPARTURE:
         return ["퇴근 준비 맥락 감지!", "절전 모드 전환 — Fan 1 유지"]
 
-    # STEADY
+    # PMV 기반 메시지 (ARRIVAL / STEADY 공통)
     if pmv > 1.5:
-        return [f"PMV {pmv:.2f} — 매우 더움!", "냉방 최대 출력 가동 중"]
-    if pmv > 0.5:
-        return [f"PMV {pmv:.2f} — 조금 더움", f"냉방 가동 → 목표 {hvac.target_temp:.0f}°C"]
-    if pmv < -1.5:
-        return [f"PMV {pmv:.2f} — 매우 추움!", "난방 최대 출력 가동 중"]
-    if pmv < -0.5:
-        return [f"PMV {pmv:.2f} — 조금 추움", f"난방 가동 → 목표 {hvac.target_temp:.0f}°C"]
-    return [f"PMV {pmv:.2f} — 쾌적 상태 유지 중", "최적 열환경 달성 완료"]
+        pmv_msg = f"PMV {pmv:+.2f} — 매우 더움!"
+        act_msg = f"{mode_str} {on_str} · Fan {hvac.fan_speed} · 목표 {hvac.target_temp:.0f}°C"
+    elif pmv > 0.5:
+        pmv_msg = f"PMV {pmv:+.2f} — 조금 더움"
+        act_msg = f"냉방 강화 중 → 목표 {hvac.target_temp:.0f}°C"
+    elif pmv < -1.5:
+        pmv_msg = f"PMV {pmv:+.2f} — 매우 추움!"
+        act_msg = f"{mode_str} {on_str} · Fan {hvac.fan_speed} · 목표 {hvac.target_temp:.0f}°C"
+    elif pmv < -0.5:
+        pmv_msg = f"PMV {pmv:+.2f} — 조금 추움"
+        act_msg = f"난방 강화 중 → 목표 {hvac.target_temp:.0f}°C"
+    else:
+        pmv_msg = f"PMV {pmv:+.2f} — 쾌적 상태"
+        act_msg = f"최적 열환경 유지 중 · {hvac.indoor_temp:.1f}°C"
+
+    if state == SystemState.ARRIVAL:
+        return [f"[도착] {pmv_msg}", act_msg]
+
+    return [pmv_msg, act_msg]
 
 
 # ── 섹션별 드로잉 함수 ────────────────────────────────────────────────────────
 
 def _draw_header(draw: ImageDraw.Draw, y: int) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 40)], fill=(40, 38, 62))
-    draw.text((10,  y + 4),  'VLM HVAC SYSTEM',
-              font=_font(15, bold=True), fill=C_TITLE)
-    draw.text((10, y + 24), datetime.now().strftime('%Y-%m-%d  %H:%M:%S'),
-              font=_font(11), fill=C_TIME)
-    return y + 40
+    draw.rectangle([(0, y), (PANEL_W, y + 64)], fill=(40, 38, 62))
+    draw.text((14,  y + 6),  'VLM HVAC SYSTEM',
+              font=_font(24, bold=True), fill=C_TITLE)
+    draw.text((14, y + 40), datetime.now().strftime('%Y-%m-%d  %H:%M:%S'),
+              font=_font(16), fill=C_TIME)
+    return y + 64
 
 
 def _pm_color(pm10: int) -> tuple:
@@ -178,7 +182,7 @@ def _draw_outdoor(draw: ImageDraw.Draw, y: int,
                   temp: float, humid: float,
                   weather: str, wind: float,
                   ds: dict = None) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 110)], fill=BG_SECT)
+    draw.rectangle([(0, y), (PANEL_W, y + 180)], fill=BG_SECT)
     y = _sect_header(draw, y, '  실외 환경')
     y = _row2(draw, y,
               '기온',  f'{temp:.1f}°C',  _temp_color(temp, True),
@@ -206,7 +210,7 @@ def _khai_str(khai) -> tuple:
 
 
 def _draw_indoor(draw: ImageDraw.Draw, y: int, hvac, ds: dict) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 88)], fill=BG_SECT)
+    draw.rectangle([(0, y), (PANEL_W, y + 145)], fill=BG_SECT)
     y = _sect_header(draw, y, '  실내 환경')
     y = _row2(draw, y,
               '온도',  f'{hvac.indoor_temp:.1f}°C', _temp_color(hvac.indoor_temp, False),
@@ -224,14 +228,14 @@ def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm,
                manual_ctrl: dict = None) -> int:
     is_manual = manual_ctrl is not None and manual_ctrl.get("enabled", False)
     bg_col = (50, 30, 30) if is_manual else BG_SECT
-    draw.rectangle([(0, y), (PANEL_W, y + 112)], fill=bg_col)
+    draw.rectangle([(0, y), (PANEL_W, y + 180)], fill=bg_col)
 
     # 섹션 헤더 — 수동 모드 시 강조 표시
     if is_manual:
-        draw.rectangle([(0, y), (PANEL_W, y + 26)], fill=(130, 40, 40))
-        draw.text((10, y + 5), '  에어컨 상태  ◀ 수동 조작 중',
-                  font=_font(13, bold=True), fill=(255, 120, 120))
-        y += 26
+        draw.rectangle([(0, y), (PANEL_W, y + 40)], fill=(130, 40, 40))
+        draw.text((14, y + 8), '  에어컨 상태  ◀ 수동 조작 중',
+                  font=_font(19, bold=True), fill=(255, 120, 120))
+        y += 40
     else:
         y = _sect_header(draw, y, '  에어컨 상태  [M키: 수동 전환]')
 
@@ -251,14 +255,14 @@ def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm,
     # 수동 모드 조작 안내
     if is_manual:
         hint = 'P:전원  C:냉방  H:난방  +/-:온도  F:팬'
-        draw.text((10, y + 2), hint, font=_font(11), fill=(200, 120, 120))
-        y += 20
+        draw.text((14, y + 4), hint, font=_font(16), fill=(200, 120, 120))
+        y += 28
 
     return y
 
 
 def _draw_occupancy(draw: ImageDraw.Draw, y: int, ds: dict) -> int:
-    draw.rectangle([(0, y), (PANEL_W, y + 168)], fill=BG_SECT)
+    draw.rectangle([(0, y), (PANEL_W, y + 270)], fill=BG_SECT)
     y = _sect_header(draw, y, '  재실 / VLM 분석')
 
     people    = ds.get('people_count', 0)
@@ -303,8 +307,8 @@ def _draw_solution(draw: ImageDraw.Draw, y: int, end_y: int,
 
     lines = _get_solution(state, pmv, hvac, out_temp, people)
     for line in lines:
-        draw.text((12, y + 3), f'▶  {line}', font=_font(12), fill=C_GOLD)
-        y += 22
+        draw.text((14, y + 5), f'▶  {line}', font=_font(18), fill=C_GOLD)
+        y += 34
     return end_y
 
 
@@ -315,9 +319,9 @@ def _draw_env_override(draw: ImageDraw.Draw, y: int,
     """환경 오버라이드 활성 시 표시되는 섹션"""
     draw.rectangle([(0, y), (PANEL_W, y + 92)], fill=(30, 20, 45))
     draw.rectangle([(0, y), (PANEL_W, y + 26)], fill=(110, 40, 110))
-    draw.text((10, y + 5), '  ENV OVERRIDE  [E:OFF  [:prev  ]:next  +/-:조정]',
-              font=_font(11, bold=True), fill=(220, 140, 255))
-    y += 26
+    draw.text((14, y + 8), '  ENV OVERRIDE  [E:OFF  [:prev  ]:next  +/-:조정]',
+              font=_font(16, bold=True), fill=(220, 140, 255))
+    y += 40
     sel = env_vars[env.get("selected", 0)]
     for var in env_vars:
         lbl  = env_label[var]
@@ -326,10 +330,10 @@ def _draw_env_override(draw: ImageDraw.Draw, y: int,
         is_sel = (var == sel)
         col  = (255, 220, 80) if is_sel else C_VAL
         prefix = "▶ " if is_sel else "  "
-        draw.text((10, y + 2), f"{prefix}{lbl}", font=_font(12), fill=col)
-        draw.text((130, y + 2), f"{val}{unit}", font=_font(13, bold=is_sel), fill=col)
-        y += 17
-    return y + 4
+        draw.text((14, y + 4), f"{prefix}{lbl}", font=_font(17), fill=col)
+        draw.text((180, y + 4), f"{val}{unit}", font=_font(18, bold=is_sel), fill=col)
+        y += 26
+    return y + 8
 
 
 def build(cam_h: int, hvac, sm,
@@ -354,7 +358,7 @@ def build(cam_h: int, hvac, sm,
     Returns:
         np.ndarray: BGR 이미지 (cam_h, PANEL_W, 3)
     """
-    panel_h = max(cam_h, 620)
+    panel_h = max(cam_h, 960)
     img  = Image.new('RGB', (PANEL_W, panel_h), BG)
     draw = ImageDraw.Draw(img)
 

@@ -40,7 +40,7 @@ WINDOW_OPEN     = False
 WORK_START_HOUR = 9
 WORK_END_HOUR   = 18
 
-YOLO_EVERY_N_FRAMES = 5   # YOLO 인원 감지 주기 (매 N프레임)
+YOLO_EVERY_N_FRAMES = 90  # YOLO 인원 감지 주기 (3초마다 — 30fps 기준)
 PMV_UPDATE_SEC      = 5   # PMV 재계산 + PID 제어 주기 (초)
 
 
@@ -225,13 +225,24 @@ def main(analysis_interval: int = 30):
     cv2.putText(dummy_frame, "No Camera Available", (50, 100),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
     if not cap.isOpened():
         print("카메라를 열 수 없습니다. 시뮬레이션 모드로 전환합니다.")
         use_camera = False
     else:
-        print("카메라가 성공적으로 연결되었습니다.")
-        use_camera = True
+        # macOS: 첫 몇 프레임은 권한 초기화로 실패할 수 있어 워밍업
+        use_camera = False
+        for _ in range(10):
+            ret, _ = cap.read()
+            if ret:
+                use_camera = True
+                break
+            time.sleep(0.1)
+        if use_camera:
+            print("카메라가 성공적으로 연결되었습니다.")
+        else:
+            print("카메라 프레임 읽기 실패. 시스템 설정 > 개인정보 > 카메라 권한을 확인하세요.")
+            cap.release()
 
     # ── 스레드 설정 ───────────────────────────────────────────────────────────
     frame_lock       = threading.Lock()
@@ -314,10 +325,15 @@ def main(analysis_interval: int = 30):
 
         # ── YOLO 인원 감지 ────────────────────────────────────────────────────
         if frame_count % YOLO_EVERY_N_FRAMES == 0:
-            yolo_count = yolo.count_people(frame)
-            if yolo_count >= 0:
-                last_people_count = yolo_count
-                last_count_source = "yolo"
+            if use_camera:
+                yolo_count = yolo.count_people(frame)
+                if yolo_count >= 0:
+                    last_people_count = yolo_count
+                    last_count_source = "yolo"
+            else:
+                # 시뮬레이션 모드: 사람 1명으로 가정 (상태 전이 테스트 가능)
+                last_people_count = 1
+                last_count_source = "sim"
 
         # ── 날씨/공기질 갱신 (60초마다) ──────────────────────────────────────
         if time.time() - last_weather_fetch >= WEATHER_FETCH_SEC:
@@ -417,16 +433,18 @@ def main(analysis_interval: int = 30):
             pass
 
         # ── 대시보드 렌더링 ───────────────────────────────────────────────────
-        cam_h   = frame.shape[0]
+        # 화면 크기에 맞게 카메라 프레임을 720p로 축소
+        display_frame = cv2.resize(frame, (1280, 720)) if frame.shape[1] > 1280 else frame
+        cam_h   = display_frame.shape[0]
         panel   = dash.build(cam_h, hvac, sm,
                              out_temp, out_humid, out_weather, out_wind,
                              display_state, manual_ctrl, env_override)
         panel_h = panel.shape[0]
         if cam_h < panel_h:
-            pad        = np.zeros((panel_h - cam_h, frame.shape[1], 3), dtype=np.uint8)
-            frame_disp = np.vstack([frame, pad])
+            pad        = np.zeros((panel_h - cam_h, display_frame.shape[1], 3), dtype=np.uint8)
+            frame_disp = np.vstack([display_frame, pad])
         else:
-            frame_disp = frame
+            frame_disp = display_frame
         combined = np.hstack([frame_disp, panel])
         cv2.imshow("VLM Intelligent HVAC System", combined)
 
