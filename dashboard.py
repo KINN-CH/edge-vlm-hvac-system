@@ -248,8 +248,12 @@ def _draw_hvac(draw: ImageDraw.Draw, y: int, hvac, sm,
     y = _row2(draw, y,
               '풍량',    f'Fan {hvac.fan_speed}',    C_VAL,
               '창문',    '열림' if hvac.window_open else '닫힘', C_CYAN)
-    occ_str = '재실 중' if sm.state.value != 'EMPTY' else '공실'
-    occ_col = C_GREEN if sm.state.value != 'EMPTY' else C_LABEL
+    _state_labels = {'EMPTY': '공실', 'ARRIVAL': '도착',
+                     'STEADY': '재실 중', 'LUNCH_BREAK': '점심 외출',
+                     'PRE_DEPARTURE': '퇴실 준비'}
+    occ_str = _state_labels.get(sm.state.value, sm.state.value)
+    occ_col = (C_LABEL  if sm.state.value == 'EMPTY' else
+               C_CYAN   if sm.state.value == 'LUNCH_BREAK' else C_GREEN)
     y = _row1(draw, y, '재실', occ_str, occ_col)
 
     # 수동 모드 조작 안내

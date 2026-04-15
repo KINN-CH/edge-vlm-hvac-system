@@ -42,17 +42,24 @@
 - **차별점:** 단순 if/else 온도 임계값 제어 대신 **ISO 7730 PMV 오차를 PID 제어기(kp=0.8, ki=0.05, kd=0.3)** 에 입력하여 팬 속도와 목표 온도를 연속적으로 계산합니다.
 - **기대효과:** 오랫동안 추웠던 공간은 적분항이 보정하고, 급격한 온도 변화는 미분항이 억제하여 오버슈트 없이 쾌적 구간에 안착합니다.
 
-### ④ 시계열 상태 머신 (Context-Aware State Control)
-- **차별점:** EMPTY → ARRIVAL → STEADY → PRE_DEPARTURE 4단계로 제어 모드를 자동 전환합니다. 퇴근 맥락(외투 착용, 인원 감소)은 인원이 남아 있어도 선제 절전을 트리거합니다.
-- **기대효과:** 출근 직후 빠른 냉·난방, 퇴근 전 선제 절전, 빈 공간 자동 OFF로 불필요한 에너지 낭비를 제거합니다.
+### ④ 시계열 상태 머신 + 맥락 인지 (Context-Aware State Control)
+- **차별점:** EMPTY → ARRIVAL → STEADY → LUNCH_BREAK → PRE_DEPARTURE **5단계** 상태로 제어 모드를 자동 전환합니다.
+  - **LUNCH_BREAK:** 점심 시간대(기본 12~13시) 인원 0 감지 시 AC를 OFF하고 대기합니다. 인원 복귀 시 ARRIVAL로 전환하여 집중 냉·난방을 재개합니다.
+  - **PRE_DEPARTURE:** 외투 착용·인원 감소 등 '퇴근 준비 맥락 점수(최대 75점)' 기반으로 인원이 남아 있어도 선제 절전합니다.
+  - **계절별 CLO 자동 적용:** VLM 추론 실패 시 사용 환경 프로파일(봄가을/여름/겨울)에 따라 착의량(CLO)을 자동 설정합니다. 예: 헬스장은 계절 무관 CLO 0.4~0.5, 사무실 겨울은 1.2.
+- **기대효과:** 출근 직후 빠른 냉·난방, 점심 공실 자동 절전 후 복귀 시 재가동, 퇴근 전 선제 절전으로 상황 맥락에 맞는 에너지 운용이 가능합니다.
 
-### ⑤ 센서 추상화 레이어 (Jetson 이전 용이성)
+### ⑤ 사용 환경 프로파일 선택 (Startup Environment Selector)
+- **차별점:** 시스템 시작 시 **사무실 / 가정 / 체육시설 / 부대시설** 환경을 GUI 카드 화면에서 선택합니다. 선택된 프로파일에 따라 점심 감지 여부, 퇴근 맥락 감지 여부, MET 기준값, 계절별 CLO가 자동 설정됩니다.
+- **기대효과:** 단일 시스템 코드로 운영 환경에 맞는 최적 파라미터를 자동 적용하며, 헬스장처럼 점심 휴무·퇴근 개념이 없는 공간에서도 오탐 없이 동작합니다.
+
+### ⑥ 이중 창 UI + PMV 선호도 버튼
+- **차별점:** 운영자 창(카메라 + 대시보드)과 사용자 창(삼성 시스템 에어컨 벽면 리모컨 스타일)을 분리합니다. 사용자 창의 **추워요 / 더워요** 버튼 클릭으로 PMV 선호도(±0.5 단계)를 실시간 조정합니다.
+- **기대효과:** 재실자가 키보드 없이 터치/클릭 한 번으로 개인 쾌적도를 반영할 수 있으며, 운영자는 별도 창에서 센서·AI 분석 정보를 모니터링합니다.
+
+### ⑦ 센서 추상화 레이어 (Jetson 이전 용이성)
 - **차별점:** `sensor_interface.py`의 `MODE` 변수 하나만 바꾸면 (`simulate` → `dht22` / `bme280`) Jetson 하드웨어 센서로 전환됩니다. 나머지 모든 코드는 수정 불필요합니다.
 - **기대효과:** 노트북 개발 환경과 Jetson 운영 환경 사이의 이전 비용을 최소화합니다.
-
-### ⑥ 에너지 절약 정량화 및 실시간 대시보드
-- **차별점:** 전통 방식(항상 Fan 2 가동) 대비 실제 소비 전력량을 매 스텝 누적 비교하여 **절약률(%)** 을 실시간 산출하고, PIL 기반 사이드 패널 UI로 시각화합니다.
-- **기대효과:** 논문 및 보고서용 정량 데이터(kWh, 절약률, PMV 쾌적 유지율) 자동 수집으로 시스템 효과를 객관적으로 증명합니다.
 
 ---
 
@@ -82,8 +89,12 @@ graph TD
         A3[Sensor / Simulate] --> B3[온습도 데이터]
     end
 
+    subgraph "0. 시작 설정"
+        S1["startup_screen.py\n환경 선택 GUI\n(사무실/가정/체육시설/부대시설)"] --> S2["env_profiles.py\nEnvProfile 파라미터\n(CLO·MET·점심·퇴근 플래그)"]
+    end
+
     subgraph "2. 병렬 인지 레이어"
-        B1 --> C1["YOLOv8n\n인원 수 감지\n(매 5프레임, 10~20fps)"]
+        B1 --> C1["YOLOv8n\n인원 수 감지\n(매 90프레임 ≈ 3초)"]
         B1 --> C2["MotionDetector\n프레임 차분 움직임 강도\n(매 프레임)"]
         B1 --> C3["VLM Background Thread\nQwen2-VL-2B\n착의량·활동·방크기·열원\n(30초 주기)"]
     end
@@ -92,62 +103,79 @@ graph TD
         C1 --> D1[인원 수]
         C2 --> D2[motion_score → MET 보정]
         C3 --> D3["clo, met, room_size\nheat_source, activity"]
+        S2 --> D3F["계절별 CLO fallback\n(VLM 실패 시)"]
         B2 --> D4[실외 온습도]
         B3 --> D5[실내 온습도]
 
-        D1 & D2 & D3 & D4 & D5 --> E1["StateManager\nEMPTY→ARRIVAL\n→STEADY→PRE_DEPARTURE"]
+        D1 & D2 & D3 & D3F & D4 & D5 --> E1["StateManager\nEMPTY→ARRIVAL→STEADY\n→LUNCH_BREAK→PRE_DEPARTURE"]
         D5 & D2 & D3 --> E2["ThermalEngine\nISO 7730 PMV 계산"]
     end
 
     subgraph "4. PID 제어 및 출력"
         E1 & E2 --> F1["PIDController\nPMV 오차 → 팬속도·목표온도"]
         F1 --> G1[HVACSimulator / 실제 공조기]
-        F1 --> G2["EnergyMonitor\nkWh / 절약률 / 쾌적율"]
-        G1 & G2 --> H1["Dashboard UI\n(Side Panel)"]
-        G1 --> H2["CSV Logger\nhvac_system_performance.csv"]
+        G1 --> H1["Operator Window\n카메라 + Dashboard UI"]
+        G1 --> H2["User Window\n삼성 AC 리모컨 스타일\n추워요·더워요 버튼"]
+        G1 --> H3["CSV Logger\nhvac_system_performance.csv"]
     end
 
+    style S1 fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px
     style C3 fill:#f96,stroke:#333,stroke-width:2px
     style C1 fill:#6af,stroke:#333,stroke-width:2px
     style F1 fill:#9f9,stroke:#333,stroke-width:2px
     style E1 fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style H2 fill:#fff3e0,stroke:#ff6f00,stroke-width:2px
 ```
 
 ### 6.2 모듈 구성
 
 | 파일 | 역할 |
 |------|------|
-| `main.py` | 메인 루프, 스레딩 조율, 수동/자동 키 입력 처리 |
+| `main.py` | 메인 루프, 스레딩 조율, 이중 창 관리, 마우스 콜백, 키 입력 처리 |
+| `env_profiles.py` | 사용 환경 프로파일 정의 (사무실·가정·체육시설·부대시설) — CLO·MET·점심·퇴근 파라미터 |
+| `startup_screen.py` | 시작 시 환경 선택 GUI — 호버 효과 + 클릭 선택, ESC → 사무실 기본값 |
+| `user_display.py` | 사용자 창 UI — 삼성 시스템 AC 리모컨 스타일, 추워요·더워요 버튼, PMV 선호도 표시 |
 | `vlm_processor.py` | Qwen2-VL-2B 추론 — clo/met/room_size/heat_source/activity 추출 |
-| `yolo_detector.py` | YOLOv8n 인원 감지 — 매 5프레임, YOLO 불가 시 -1 반환 |
+| `yolo_detector.py` | YOLOv8n 인원 감지 — 매 90프레임(≈3초), YOLO 불가 시 -1 반환 |
 | `motion_detector.py` | 프레임 차분 + 롤링 평균 → motion_score → MET 보정 |
 | `pid_controller.py` | PMV 오차 기반 PID 제어 (kp=0.8, ki=0.05, kd=0.3, deadband=0.12) |
 | `thermal_engine.py` | ISO 7730 PMV 계산 엔진 |
-| `state_machine.py` | 4단계 상태 전이 + 퇴근 맥락 점수 (최대 75점) |
+| `state_machine.py` | 5단계 상태 전이 (EMPTY·ARRIVAL·STEADY·LUNCH_BREAK·PRE_DEPARTURE) + 퇴근 맥락 점수 (최대 75점) |
 | `hvac_simulator.py` | 공조기 시뮬레이터 (난방/냉방 물리 모델, 기본 25°C 난방) |
 | `sensor_interface.py` | 온습도 센서 추상화 (simulate / dht22 / bme280) |
-| `energy_monitor.py` | 소비전력 누적 + 베이스라인 비교, 쾌적율 산출 |
+| `energy_monitor.py` | 소비전력 누적 모듈 — 현재 메인 루프에서 미사용, 향후 하드웨어 연동 시 활성화 예정 |
 | `weather_service.py` | 기상청(KMA) 초단기실황 API — 온도·습도·날씨·풍속 취득 (60초 주기) |
 | `air_quality_service.py` | 에어코리아 API — PM10/PM2.5/KHAI 취득 (60초 주기) |
-| `dashboard.py` | PIL 기반 사이드 패널 UI (실외환경·PM2.5·수동제어 표시, 한글 폰트 자동 감지) |
+| `dashboard.py` | PIL 기반 운영자 대시보드 (실외환경·PM2.5·상태머신·수동제어 표시, 한글 폰트 자동 감지) |
 | `convert_tensorrt.py` | Jetson TRT 변환 유틸리티 (YOLO FP16 / Qwen2-VL INT4) |
 | `virtual_ac.py` | 고급 물리 기반 AC 시뮬레이터 (RoomThermalModel + CompressorUnit + WindowAdvisor) — 향후 통합 예정 |
 
 ### 6.3 데이터 파이프라인
 
 ```
+[시작] startup_screen.py → 환경 선택 (사무실/가정/체육시설/부대시설)
+         └─ env_profiles.py EnvProfile 로드
+              (점심 감지 여부, 퇴근 감지 여부, MET 기준값, 계절별 CLO)
+
 카메라 프레임 (30fps)
-  ├─ YOLOv8n  (매 5프레임) → 인원 수
+  ├─ YOLOv8n  (매 90프레임 ≈ 3초) → 인원 수
   ├─ MotionDetector (매 프레임) → motion_score → MET 보정
   └─ VLM Thread (30초 주기)
        └─ Qwen2-VL-2B → clo / met / room_size / heat_source / activity
+            (VLM 미가동 시 → 계절별 CLO fallback from EnvProfile)
 
 기상청 API (60초 주기) → 실외 온도·습도·날씨·풍속
 에어코리아 API (60초 주기) → PM10 / PM2.5 / 통합대기환경지수(KHAI)
 
-융합 → StateManager 갱신 → ThermalEngine PMV 계산
-  → PIDController (STEADY) 또는 규칙 기반 (ARRIVAL/PRE_DEPARTURE/EMPTY)
-  → HVACSimulator 제어 명령 → Dashboard 렌더링 → CSV 기록
+융합 → StateManager 갱신
+       (EMPTY → ARRIVAL → STEADY → LUNCH_BREAK → PRE_DEPARTURE)
+       (점심 시간대 인원 0 → LUNCH_BREAK, 복귀 시 → ARRIVAL)
+  → ThermalEngine PMV 계산 (adjusted_pmv = pmv - 사용자선호도)
+  → PIDController (STEADY) 또는 규칙 기반 (ARRIVAL/PRE_DEPARTURE/LUNCH_BREAK/EMPTY)
+  → HVACSimulator 제어 명령
+  → [운영자 창] 카메라 + Dashboard 렌더링
+  → [사용자 창] AC 리모컨 UI (추워요·더워요 버튼)
+  → CSV 기록 (hvac_system_performance.csv)
 ```
 
 ### 6.4 하드웨어 및 소프트웨어 스택
@@ -184,15 +212,24 @@ AIR_QUALITY_API_KEY=에어코리아_API_키
 AIR_QUALITY_STATION=장림동
 ```
 
-**키 입력:**
+**실행 흐름:**
+1. 시작 시 환경 선택 GUI 표시 → 카드 클릭 or ESC(사무실 기본값)
+2. **운영자 창** (좌): 카메라 영상 + 대시보드 (센서·AI·상태 정보)
+3. **사용자 창** (우): AC 리모컨 스타일 UI — **추워요 / 더워요 버튼 클릭**으로 PMV 선호도 조정
+
+**운영자 창 키 입력:**
 - `s` — 즉시 VLM 분석 실행
 - `w` — 창문 열기/닫기 토글
-- `q` — 종료 및 에너지 요약 출력
+- `q` — 종료
 - `m` — 수동/자동 모드 전환
   - (수동 모드) `p` — 전원 ON/OFF
   - (수동 모드) `c` / `h` — 냉방 / 난방 전환
   - (수동 모드) `+` / `-` — 설정 온도 ±1°C
   - (수동 모드) `f` — 팬 속도 순환 (1→2→3→1)
+
+**사용자 창 버튼 (마우스 클릭):**
+- `추워요` — PMV 선호도 +0.5 (더 따뜻하게)
+- `더워요` — PMV 선호도 -0.5 (더 시원하게)
 
 ---
 

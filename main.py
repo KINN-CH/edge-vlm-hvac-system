@@ -21,7 +21,10 @@ from yolo_detector import YOLODetector
 from pid_controller import PIDController
 from sensor_interface import SensorInterface
 from control_logic import decide_control, decide_window, FAN_VELOCITY
+from env_profiles import PROFILES, EnvProfile
+from startup_screen import show_and_select
 import dashboard as dash
+import user_display as udisplay
 
 load_dotenv()
 
@@ -94,11 +97,61 @@ def vlm_worker(vlm, frame_lock, shared_frame_ref,
 
 # ── VLM 결과 처리 ─────────────────────────────────────────────────────────────
 
+def _seasonal_clo(profile: EnvProfile) -> float:
+    """계절(월)에 따른 CLO 기본값 반환 — VLM 실패 시 fallback 전용"""
+    m = datetime.now().month
+    if 6 <= m <= 8:
+        return profile.clo_summer
+    if m in (3, 4, 5, 9, 10, 11):
+        return profile.clo_spring_fall
+    return profile.clo_winter
+
+
+def _predict_occupancy(log_file: str) -> dict:
+    """CSV 로그에서 시간대별 재실 패턴을 분석해 다음 출근 예측."""
+    label_col = (100, 110, 145)
+    if not os.path.exists(log_file):
+        return {'message': '로그 없음 — 데이터 수집 중', 'color': label_col, 'record_count': 0}
+    try:
+        df = pd.read_csv(log_file)
+        if 'timestamp' not in df.columns or 'people_count' not in df.columns or len(df) < 5:
+            return {'message': f'기록 {len(df)}건 — 데이터 수집 중', 'color': label_col, 'record_count': len(df)}
+
+        df['timestamp']    = pd.to_datetime(df['timestamp'], errors='coerce')
+        df                 = df.dropna(subset=['timestamp'])
+        df['hour']         = df['timestamp'].dt.hour
+        df['people_count'] = pd.to_numeric(df['people_count'], errors='coerce').fillna(0)
+
+        # 시간대별 재실 비율
+        hourly = df.groupby('hour')['people_count'].apply(lambda x: (x > 0).mean())
+        now_h  = datetime.now().hour
+
+        # 향후 시간대 중 재실 확률 30% 이상인 첫 시간
+        future = sorted(h for h in hourly.index if h > now_h and hourly[h] >= 0.3)
+        if future:
+            nh  = future[0]
+            pct = int(hourly[nh] * 100)
+            msg = f'{nh}시경 출근 예상  (재실 확률 {pct}%)'
+            col = (160, 130, 255)
+        elif hourly.get(now_h, 0) >= 0.3:
+            pct = int(hourly[now_h] * 100)
+            msg = f'현재({now_h}시) 재실 확률 {pct}% — 평균적 출근 시간대'
+            col = (80, 200, 90)
+        else:
+            msg = f'이 시간대 재실 기록 적음 — 공실 유지 예상'
+            col = label_col
+
+        return {'message': msg, 'color': col, 'record_count': len(df)}
+    except Exception as exc:
+        return {'message': f'분석 오류: {str(exc)[:40]}', 'color': (210, 70, 70), 'record_count': 0}
+
+
 def process_vlm_result(vlm_data, people_count, count_source,
                        motion_det, hvac, sm, engine, pid,
                        sensor, display_state,
                        out_temp, out_humid, out_weather, out_wind,
-                       pm10, pm25, khai):
+                       pm10, pm25, khai,
+                       pmv_preference: float = 0.0):
     """
     VLM 분석 결과 + YOLO 인원 수를 통합하여
     PMV 계산 → 상태 머신 업데이트 → 제어 결정 → 로그 딕셔너리 반환.
@@ -135,9 +188,11 @@ def process_vlm_result(vlm_data, people_count, count_source,
 
     hvac.set_room(vlm_data["room_size_m2"], False)   # window always closed for physics
 
-    # ── 제어 결정 ─────────────────────────────────────────────────────────────
+    # ── 제어 결정 (사용자 선호 반영) ────────────────────────────────────────
+    # adjusted_pmv: 사용자가 따뜻함 선호(+) → 시스템이 더 춥다고 인식 → 난방 강화
+    adjusted_pmv = pmv_val - pmv_preference
     power, target_temp, fan_speed, mode = decide_control(
-        pmv_val, people_count, pid, hvac.is_on, hvac.mode,
+        adjusted_pmv, people_count, pid, hvac.is_on, hvac.mode,
         current_fan=hvac.fan_speed)
 
     if power is False:
@@ -203,6 +258,9 @@ def process_vlm_result(vlm_data, people_count, count_source,
 # ── 메인 ──────────────────────────────────────────────────────────────────────
 
 def main(analysis_interval: int = 30):
+    # ── 환경 선택 ─────────────────────────────────────────────────────────────
+    env_profile = show_and_select()
+
     initialize_csv()
 
     vlm         = VLMProcessor()
@@ -212,8 +270,14 @@ def main(analysis_interval: int = 30):
     hvac        = HVACSimulator(room_size=ROOM_SIZE_M2)
     hvac.set_room(ROOM_SIZE_M2, WINDOW_OPEN)
     engine      = ThermalEngine()
-    sm          = StateManager(work_start_hour=WORK_START_HOUR,
-                               work_end_hour=WORK_END_HOUR)
+    sm          = StateManager(
+        work_start_hour    = env_profile.work_start,
+        work_end_hour      = env_profile.work_end,
+        lunch_enabled      = env_profile.lunch_enabled,
+        lunch_start        = env_profile.lunch_start,
+        lunch_end          = env_profile.lunch_end,
+        departure_enabled  = env_profile.departure_enabled,
+    )
     motion_det  = MotionDetector(history_len=10, blur_ksize=21)
     yolo        = YOLODetector(imgsz=320, conf=0.35)
     pid         = PIDController(kp=0.8, ki=0.05, kd=0.3)
@@ -285,6 +349,33 @@ def main(analysis_interval: int = 30):
     last_weather_fetch = 0.0
     last_pmv_update    = 0.0
     frame_count        = 0
+
+    # ── 사용자 선호 + PMV 이력 ────────────────────────────────────────────────
+    PMV_PREF_STEP  = 0.5
+    PMV_PREF_MAX   = 2.0
+    pmv_history: list = []
+    PMV_HISTORY_MAX   = 30
+
+    # 마우스 콜백을 위한 공유 상태 (mutable dict)
+    pref_state = {'value': 0.0}
+
+    def _user_mouse_cb(event, x, y, flags, param):
+        if event != cv2.EVENT_LBUTTONDOWN:
+            return
+        clicked = udisplay.get_clicked(x, y)
+        if clicked == 'cold':   # 추워요 → 따뜻하게
+            param['value'] = min(PMV_PREF_MAX,
+                                 round(param['value'] + PMV_PREF_STEP, 1))
+            print(f"[선호] 추워요 → 따뜻하게  오프셋={param['value']:+.1f}")
+        elif clicked == 'hot':  # 더워요 → 시원하게
+            param['value'] = max(-PMV_PREF_MAX,
+                                 round(param['value'] - PMV_PREF_STEP, 1))
+            print(f"[선호] 더워요 → 시원하게  오프셋={param['value']:+.1f}")
+
+    # ── 재실 예측 ─────────────────────────────────────────────────────────────
+    occ_pred              = {'message': '데이터 수집 중...', 'color': (100, 110, 145), 'record_count': 0}
+    occ_pred_last_update  = 0.0
+    OCC_PRED_INTERVAL_SEC = 60.0
 
     # ── 수동 제어 상태 ────────────────────────────────────────────────────────
     manual_ctrl = {
@@ -366,8 +457,8 @@ def main(analysis_interval: int = 30):
                 met_src  = "motion" if motion_det.should_override_vlm() else "vlm"
             else:
                 heat_src = "no"
-                eff_met  = 1.2    # 기본: 기립 수준
-                eff_clo  = 1.0    # 기본: 긴 소매
+                eff_met  = env_profile.met_baseline
+                eff_clo  = _seasonal_clo(env_profile)
                 met_src  = "default"
 
             tr_c    = s_temp + (VLMProcessor.TR_HEAT_OFFSET if heat_src == "yes" else 0.0)
@@ -381,6 +472,11 @@ def main(analysis_interval: int = 30):
             display_state["met"]         = eff_met
             display_state["met_source"]  = met_src
 
+            # PMV 이력 누적
+            pmv_history.append(round(pmv_now, 3))
+            if len(pmv_history) > PMV_HISTORY_MAX:
+                pmv_history.pop(0)
+
             # 상태 머신 업데이트
             if last_vlm_data is not None:
                 sm.update(last_people_count,
@@ -389,8 +485,10 @@ def main(analysis_interval: int = 30):
             else:
                 sm.update(last_people_count)
 
+            # 사용자 선호 반영: adjusted_pmv로 제어
+            adjusted_pmv = pmv_now - pref_state['value']
             power, tgt, fan, mode = decide_control(
-                pmv_now, last_people_count, pid, hvac.is_on, hvac.mode,
+                adjusted_pmv, last_people_count, pid, hvac.is_on, hvac.mode,
                 current_fan=hvac.fan_speed)
             if power is True:
                 hvac.set_control(power=True, target=tgt, fan=fan, mode=mode)
@@ -433,13 +531,19 @@ def main(analysis_interval: int = 30):
                 sensor, display_state,
                 out_temp, out_humid, out_weather, out_wind,
                 pm10, pm25, khai,
+                pmv_preference=pref_state['value'],
             )
             save_log(log_row)
         except queue.Empty:
             pass
 
-        # ── 대시보드 렌더링 ───────────────────────────────────────────────────
-        # 화면 크기에 맞게 카메라 프레임을 720p로 축소
+        # ── 재실 예측 갱신 (60초마다) ────────────────────────────────────────
+        now_t = time.time()
+        if now_t - occ_pred_last_update >= OCC_PRED_INTERVAL_SEC:
+            occ_pred             = _predict_occupancy(LOG_FILE)
+            occ_pred_last_update = now_t
+
+        # ── 운영자 대시보드 렌더링 ────────────────────────────────────────────
         display_frame = cv2.resize(frame, (1280, 720)) if frame.shape[1] > 1280 else frame
         cam_h   = display_frame.shape[0]
         panel   = dash.build(cam_h, hvac, sm,
@@ -452,7 +556,20 @@ def main(analysis_interval: int = 30):
         else:
             frame_disp = display_frame
         combined = np.hstack([frame_disp, panel])
-        cv2.imshow("VLM Intelligent HVAC System", combined)
+        cv2.imshow("HVAC Operator", combined)
+
+        # ── 사용자 인터페이스 창 렌더링 ───────────────────────────────────────
+        user_img = udisplay.build(
+            hvac, sm, display_state,
+            pref_state['value'], pmv_history, occ_pred, out_temp,
+        )
+        cv2.imshow("HVAC User", user_img)
+
+        # 첫 프레임: 창 위치 분리 (겹치지 않도록)
+        if frame_count == 1:
+            cv2.moveWindow("HVAC Operator", 0, 0)
+            cv2.moveWindow("HVAC User", combined.shape[1] + 10, 0)
+            cv2.setMouseCallback("HVAC User", _user_mouse_cb, pref_state)
 
         # ── 키 입력 처리 ──────────────────────────────────────────────────────
         key = cv2.waitKey(1) & 0xFF
@@ -465,6 +582,16 @@ def main(analysis_interval: int = 30):
         elif key == ord("w"):
             hvac.window_open = not hvac.window_open
             print(f"[창문] {'열림' if hvac.window_open else '닫힘'}")
+
+        elif key == ord("u"):
+            pref_state['value'] = min(PMV_PREF_MAX,
+                                      round(pref_state['value'] + PMV_PREF_STEP, 1))
+            print(f"[선호] 따뜻하게  오프셋={pref_state['value']:+.1f}")
+
+        elif key == ord("d"):
+            pref_state['value'] = max(-PMV_PREF_MAX,
+                                      round(pref_state['value'] - PMV_PREF_STEP, 1))
+            print(f"[선호] 시원하게  오프셋={pref_state['value']:+.1f}")
 
         elif key == ord("s"):
             # 즉시 VLM 분석 (수동 트리거)
@@ -479,6 +606,7 @@ def main(analysis_interval: int = 30):
                     sensor, display_state,
                     out_temp, out_humid, out_weather, out_wind,
                     pm10, pm25, khai,
+                    pmv_preference=pref_state['value'],
                 )
                 save_log(log_row)
 

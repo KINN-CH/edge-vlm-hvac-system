@@ -7,6 +7,7 @@ class SystemState(Enum):
     EMPTY         = "EMPTY"          # 빈 공간 (인원 없음)
     ARRIVAL       = "ARRIVAL"        # 도착 직후 (적극적 냉·난방)
     STEADY        = "STEADY"         # 안정 운전 (PMV 기반 제어)
+    LUNCH_BREAK   = "LUNCH_BREAK"    # 점심 외출 (AC 유지, 복귀 대기)
     PRE_DEPARTURE = "PRE_DEPARTURE"  # 퇴근 준비 감지 (선제 절전)
 
 
@@ -29,20 +30,35 @@ class StateManager:
     기립 자세    : +10  (VLM activity = 'standing')
     퇴근 시간대  : +10  (설정 퇴근 시각 ±1시간)
     최대 점수    : 75점
+
+    ── 점심 감지 (lunch_enabled=True 일 때만) ──────────────────────────────
+    STEADY/ARRIVAL 중 인원 0 + lunch_start <= 현재 시각 < lunch_end
+    → LUNCH_BREAK 전환 (AC 유지, PMV 허용폭 완화)
+    LUNCH_BREAK 중 인원 복귀  → STEADY 복귀
+    LUNCH_BREAK 지속 90분 초과 → EMPTY (진짜 자리 비움)
     """
 
-    ARRIVAL_DURATION_SEC = 60 if __import__('platform').system() == "Darwin" else 600  # macOS: 1분, Jetson: 10분
-    EMPTY_CONFIRM_SEC    = 30    # 인원 0 확인 후 EMPTY 전환까지 대기 (30초)
-    DEPARTURE_SCORE_ON   = 55    # PRE_DEPARTURE 진입 임계값
-    DEPARTURE_SCORE_OFF  = 30    # STEADY 복귀 임계값 (히스테리시스)
+    ARRIVAL_DURATION_SEC = 60 if __import__('platform').system() == "Darwin" else 600
+    EMPTY_CONFIRM_SEC    = 30
+    DEPARTURE_SCORE_ON   = 55
+    DEPARTURE_SCORE_OFF  = 30
+    LUNCH_MAX_SEC        = 90 * 60   # 점심 최대 지속 90분 → 이후 EMPTY
 
-    def __init__(self, work_start_hour: int = 9, work_end_hour: int = 18):
-        self.state             = SystemState.EMPTY
-        self.work_start_hour   = work_start_hour
-        self.work_end_hour     = work_end_hour
+    def __init__(self, work_start_hour: int = 9, work_end_hour: int = 18,
+                 lunch_enabled: bool = True,
+                 lunch_start: int = 12, lunch_end: int = 13,
+                 departure_enabled: bool = True):
+        self.state              = SystemState.EMPTY
+        self.work_start_hour    = work_start_hour
+        self.work_end_hour      = work_end_hour
+        self.lunch_enabled      = lunch_enabled
+        self.lunch_start        = lunch_start
+        self.lunch_end          = lunch_end
+        self.departure_enabled  = departure_enabled
 
-        self._arrival_time      = None   # ARRIVAL 진입 시각 (time.time())
-        self._empty_since       = None   # 인원 0 감지 시작 시각
+        self._arrival_time      = None
+        self._empty_since       = None
+        self._lunch_since       = None   # LUNCH_BREAK 진입 시각
         self._prev_people_count = 0
         self._departure_score   = 0
 
@@ -61,16 +77,32 @@ class StateManager:
         Returns:
             SystemState: 갱신된 현재 상태
         """
-        now = time.time()
+        now  = time.time()
+        hour = datetime.datetime.fromtimestamp(now).hour
+        in_lunch = (self.lunch_enabled and
+                    self.lunch_start <= hour < self.lunch_end)
 
-        # ── 인원 0 지속 → EMPTY 전환 ─────────────────────────────────────────
+        # ── 인원 0 처리 ───────────────────────────────────────────────────────
         if people_count == 0:
-            if self._empty_since is None:
-                self._empty_since = now
-            elif now - self._empty_since >= self.EMPTY_CONFIRM_SEC:
-                self._transition(SystemState.EMPTY)
+            if self.state == SystemState.LUNCH_BREAK:
+                # 점심 중 — 90분 초과 시 진짜 EMPTY
+                if self._lunch_since and now - self._lunch_since >= self.LUNCH_MAX_SEC:
+                    self._transition(SystemState.EMPTY)
+            elif (in_lunch and
+                  self.state in (SystemState.STEADY, SystemState.ARRIVAL)):
+                # 점심 시간대 인원 0 → LUNCH_BREAK
+                self._transition(SystemState.LUNCH_BREAK)
+            else:
+                # 일반 인원 0 → 30초 후 EMPTY
+                if self._empty_since is None:
+                    self._empty_since = now
+                elif now - self._empty_since >= self.EMPTY_CONFIRM_SEC:
+                    self._transition(SystemState.EMPTY)
         else:
             self._empty_since = None
+            # 점심 복귀 → ARRIVAL (여름/겨울 1시간 공실이면 온도 충분히 변함)
+            if self.state == SystemState.LUNCH_BREAK:
+                self._transition(SystemState.ARRIVAL)
 
         # ── 상태별 전이 ───────────────────────────────────────────────────────
         if self.state == SystemState.EMPTY:
@@ -83,11 +115,12 @@ class StateManager:
                 self._transition(SystemState.STEADY)
 
         elif self.state == SystemState.STEADY:
-            self._departure_score = self._compute_departure_score(
-                people_count, outerwear, activity, now
-            )
-            if self._departure_score >= self.DEPARTURE_SCORE_ON:
-                self._transition(SystemState.PRE_DEPARTURE)
+            if self.departure_enabled:
+                self._departure_score = self._compute_departure_score(
+                    people_count, outerwear, activity, now
+                )
+                if self._departure_score >= self.DEPARTURE_SCORE_ON:
+                    self._transition(SystemState.PRE_DEPARTURE)
 
         elif self.state == SystemState.PRE_DEPARTURE:
             if people_count == 0:
@@ -97,7 +130,7 @@ class StateManager:
                     people_count, outerwear, activity, now
                 )
                 if self._departure_score < self.DEPARTURE_SCORE_OFF:
-                    self._transition(SystemState.STEADY)  # 오탐 복귀
+                    self._transition(SystemState.STEADY)
 
         self._prev_people_count = people_count
         return self.state
@@ -122,9 +155,13 @@ class StateManager:
         if new_state == SystemState.ARRIVAL:
             self._arrival_time    = time.time()
             self._departure_score = 0
+            self._lunch_since     = None
+        elif new_state == SystemState.LUNCH_BREAK:
+            self._lunch_since     = time.time()
         elif new_state == SystemState.EMPTY:
             self._arrival_time    = None
             self._departure_score = 0
+            self._lunch_since     = None
 
     def _compute_departure_score(self, people_count: int, outerwear: str,
                                   activity: str, now: float) -> int:
