@@ -1,85 +1,151 @@
 {
-  "name": "헬스장 오전 시나리오",
-  "description": "이른 아침 헬스장. 운동 중 높은 대사량(MET 3.0)과 대인원이 복합적으로 체열을 발생시키는 환경. 새벽 12°C → 낮 22°C 외기 변화로 냉방 부하가 시간대별로 달라짐.",
+  "name": "헬스장 하루 시나리오",
+  "description": "60m² 헬스장 하루 전체. 새벽 오픈(06:00) → 아침 피크(07-09시) → 낮 한산 → 점심 공실 → 오후 소수 이용 → 저녁 피크(18-20시) → 마감(22시). MET 변화(준비운동 1.5 → 고강도 4.0 → 쿨다운 1.5)와 체열·발한에 의한 급격한 PMV 상승 검증.",
   "room_size_m2": 60.0,
-  "initial_indoor_temp": 18.0,
-  "initial_indoor_humid": 52.0,
-  "outdoor": {
-    "temp": 14.0,
-    "humid": 55.0
-  },
+  "initial_indoor_temp": 17.0,
+  "initial_indoor_humid": 48.0,
+  "work_end_hour": 22,
+  "outdoor": { "temp": 15.0, "humid": 55.0 },
   "timeline": [
     {
-      "start": "00:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 12.0,
-      "heat_source": false,
-      "note": "야간 공실 — 선선한 새벽"
+      "start": "00:00", "people": 0, "met": 1.0, "clo": 0.4,
+      "outdoor_temp": 12.0, "outdoor_humid": 60.0, "heat_source": false,
+      "note": "야간 공실 — 환기로 쾌적 유지"
     },
     {
-      "start": "06:00",
-      "people": 2,
-      "met": 3.0,
-      "clo": 0.3,
-      "outdoor_temp": 14.0,
-      "heat_source": false,
-      "note": "이른 이용자 — 운동복(clo 0.3), 고강도 운동(MET 3.0)"
+      "start": "05:30", "people": 1, "met": 1.5, "clo": 0.4,
+      "outdoor_temp": 11.0, "outdoor_humid": 62.0, "heat_source": false,
+      "note": "최조 이용자 — 준비운동, 가장 선선한 시간"
     },
     {
-      "start": "07:00",
-      "people": 10,
-      "met": 3.0,
-      "clo": 0.3,
-      "outdoor_temp": 16.0,
-      "heat_source": false,
-      "note": "피크 타임 — 최다 인원, 격렬한 운동. 체열 + 발한 증가"
+      "start": "06:00", "people": 3, "met": 3.0, "clo": 0.3,
+      "outdoor_temp": 12.0, "outdoor_humid": 60.0, "heat_source": false,
+      "note": "이른 아침 — 고강도 운동 시작, 체열 발생"
     },
     {
-      "start": "09:00",
-      "people": 5,
-      "met": 1.5,
-      "clo": 0.3,
-      "outdoor_temp": 18.0,
-      "heat_source": false,
-      "note": "피크 이후 — 인원 감소, 유산소→스트레칭(보행 수준)"
+      "start": "06:30", "people": 6, "met": 3.5, "clo": 0.3,
+      "outdoor_temp": 13.0, "outdoor_humid": 58.0, "heat_source": false,
+      "note": "인원 증가 — 격렬한 운동, PMV 급상승 구간"
     },
     {
-      "start": "11:00",
-      "people": 2,
-      "met": 1.5,
-      "clo": 0.5,
-      "outdoor_temp": 21.0,
-      "heat_source": false,
-      "note": "한산 — 가벼운 이용자, 외기 온도 상승"
+      "start": "07:00", "people": 14, "met": 4.0, "clo": 0.3,
+      "outdoor_temp": 14.0, "outdoor_humid": 57.0, "heat_source": false,
+      "note": "아침 피크 최다 인원 — 최고강도(MET 4.0), 발한 극대화, 강냉방 필요"
     },
     {
-      "start": "13:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 23.0,
-      "heat_source": false,
-      "note": "점심 공실 — 가장 더운 시간대"
+      "start": "07:30", "people": 12, "met": 3.5, "clo": 0.3,
+      "outdoor_temp": 15.0, "outdoor_humid": 56.0, "heat_source": false,
+      "note": "피크 정점 — 체열 축적, 습도 높음"
     },
     {
-      "start": "17:00",
-      "people": 8,
-      "met": 3.0,
-      "clo": 0.3,
-      "outdoor_temp": 21.0,
-      "heat_source": false,
-      "note": "퇴근 후 저녁 피크 — 외기 하강 중"
+      "start": "08:00", "people": 10, "met": 3.0, "clo": 0.3,
+      "outdoor_temp": 16.0, "outdoor_humid": 55.0, "heat_source": false,
+      "note": "피크 이후 하락 — 일부 퇴장, 강도 소폭 감소"
     },
     {
-      "start": "20:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 17.0,
-      "heat_source": false,
-      "note": "마감 — 기온 하강"
+      "start": "08:30", "people": 7, "met": 2.5, "clo": 0.3,
+      "outdoor_temp": 17.0, "outdoor_humid": 54.0, "heat_source": false,
+      "note": "출근 전 마무리 — 유산소 위주"
+    },
+    {
+      "start": "09:00", "people": 4, "met": 1.5, "clo": 0.3,
+      "outdoor_temp": 18.0, "outdoor_humid": 54.0, "heat_source": false,
+      "note": "피크 후 한산 — 스트레칭·쿨다운"
+    },
+    {
+      "start": "09:30", "people": 2, "met": 1.5, "clo": 0.4,
+      "outdoor_temp": 19.0, "outdoor_humid": 53.0, "heat_source": false,
+      "note": "소수 이용 — 가벼운 운동"
+    },
+    {
+      "start": "10:30", "people": 3, "met": 2.5, "clo": 0.3,
+      "outdoor_temp": 20.0, "outdoor_humid": 52.0, "heat_source": false,
+      "note": "오전 중반 이용자 — 중강도"
+    },
+    {
+      "start": "11:30", "people": 1, "met": 1.5, "clo": 0.4,
+      "outdoor_temp": 21.5, "outdoor_humid": 51.0, "heat_source": false,
+      "note": "점심 전 마지막 이용자"
+    },
+    {
+      "start": "12:00", "people": 0, "met": 1.0, "clo": 0.4,
+      "outdoor_temp": 22.5, "outdoor_humid": 50.0, "heat_source": false,
+      "note": "점심 공실 — 청소·환기 시간, AC OFF"
+    },
+    {
+      "start": "13:00", "people": 2, "met": 2.0, "clo": 0.3,
+      "outdoor_temp": 23.0, "outdoor_humid": 50.0, "heat_source": false,
+      "note": "오후 이용자 — ARRIVAL 재트리거, 외기 가장 더운 시간"
+    },
+    {
+      "start": "14:00", "people": 3, "met": 2.5, "clo": 0.3,
+      "outdoor_temp": 22.5, "outdoor_humid": 51.0, "heat_source": false,
+      "note": "오후 중반 — 소수 중강도"
+    },
+    {
+      "start": "15:00", "people": 1, "met": 1.5, "clo": 0.4,
+      "outdoor_temp": 21.5, "outdoor_humid": 52.0, "heat_source": false,
+      "note": "오후 한산"
+    },
+    {
+      "start": "16:00", "people": 0, "met": 1.0, "clo": 0.4,
+      "outdoor_temp": 20.5, "outdoor_humid": 53.0, "heat_source": false,
+      "note": "저녁 피크 전 공실 — 청소"
+    },
+    {
+      "start": "17:00", "people": 5, "met": 2.5, "clo": 0.3,
+      "outdoor_temp": 19.5, "outdoor_humid": 54.0, "heat_source": false,
+      "note": "저녁 피크 시작 — 퇴근 후 이용자 유입"
+    },
+    {
+      "start": "17:30", "people": 9, "met": 3.0, "clo": 0.3,
+      "outdoor_temp": 19.0, "outdoor_humid": 55.0, "heat_source": false,
+      "note": "저녁 피크 상승 — 인원·강도 증가"
+    },
+    {
+      "start": "18:00", "people": 16, "met": 3.5, "clo": 0.3,
+      "outdoor_temp": 18.0, "outdoor_humid": 56.0, "heat_source": false,
+      "note": "저녁 최다 인원 — 아침 피크보다 많음, 강냉방 필요"
+    },
+    {
+      "start": "18:30", "people": 15, "met": 4.0, "clo": 0.3,
+      "outdoor_temp": 17.5, "outdoor_humid": 57.0, "heat_source": false,
+      "note": "저녁 피크 정점 — 체열·습도 극한"
+    },
+    {
+      "start": "19:00", "people": 13, "met": 3.5, "clo": 0.3,
+      "outdoor_temp": 17.0, "outdoor_humid": 57.0, "heat_source": false,
+      "note": "피크 정점 이후 — 서서히 감소"
+    },
+    {
+      "start": "19:30", "people": 10, "met": 3.0, "clo": 0.3,
+      "outdoor_temp": 16.5, "outdoor_humid": 58.0, "heat_source": false,
+      "note": "저녁 피크 하락"
+    },
+    {
+      "start": "20:00", "people": 6, "met": 2.0, "clo": 0.3,
+      "outdoor_temp": 16.0, "outdoor_humid": 59.0, "heat_source": false,
+      "note": "마감 1시간 전 — 쿨다운 위주"
+    },
+    {
+      "start": "20:30", "people": 3, "met": 1.5, "clo": 0.4,
+      "outdoor_temp": 15.5, "outdoor_humid": 59.0, "heat_source": false,
+      "note": "마감 전 소수"
+    },
+    {
+      "start": "21:00", "people": 1, "met": 1.5, "clo": 0.4,
+      "outdoor_temp": 15.0, "outdoor_humid": 60.0, "heat_source": false,
+      "note": "마지막 이용자"
+    },
+    {
+      "start": "21:30", "people": 0, "met": 1.0, "clo": 0.4,
+      "outdoor_temp": 14.5, "outdoor_humid": 61.0, "heat_source": false,
+      "note": "마감 — EMPTY, 환기 모드"
+    },
+    {
+      "start": "23:00", "people": 0, "met": 1.0, "clo": 0.4,
+      "outdoor_temp": 13.0, "outdoor_humid": 62.0, "heat_source": false,
+      "note": "야간 — 기온 하강"
     }
   ]
 }

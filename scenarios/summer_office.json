@@ -1,112 +1,131 @@
 {
   "name": "여름철 사무실 시나리오",
-  "description": "한여름 폭염 조건에서 일반 사무실 하루 운영 패턴. 새벽 28°C → 정오 35°C → 저녁 29°C 기온 변화 포함.",
+  "description": "한여름 폭염(최고 37°C). 출근→오전 업무→점심 외출(LUNCH_BREAK)→오후 복귀→퇴근 준비(PRE_DEPARTURE) 전 과정 포함. 점심 시 공실로 AC OFF, 복귀 시 ARRIVAL 집중 냉방 트리거 검증.",
   "room_size_m2": 30.0,
-  "initial_indoor_temp": 27.0,
-  "initial_indoor_humid": 65.0,
-  "outdoor": {
-    "temp": 28.0,
-    "humid": 72.0
-  },
+  "initial_indoor_temp": 28.5,
+  "initial_indoor_humid": 70.0,
+  "work_end_hour": 18,
+  "outdoor": { "temp": 28.0, "humid": 75.0 },
   "timeline": [
     {
-      "start": "00:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 27.0,
-      "heat_source": false,
-      "note": "공실 새벽 — 야간 복사냉각으로 비교적 선선"
+      "start": "00:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 27.0, "outdoor_humid": 78.0, "heat_source": false,
+      "note": "한밤 공실 — 야간에도 더운 열대야"
     },
     {
-      "start": "04:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 26.0,
-      "heat_source": false,
-      "note": "최저 기온 구간"
+      "start": "03:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 25.5, "outdoor_humid": 80.0, "heat_source": false,
+      "note": "새벽 최저기온 — 그래도 25°C 이상"
     },
     {
-      "start": "07:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 29.0,
-      "heat_source": false,
-      "note": "일출 후 기온 상승 시작"
+      "start": "06:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 27.0, "outdoor_humid": 76.0, "heat_source": false,
+      "note": "일출 — 기온 재상승 시작"
     },
     {
-      "start": "09:00",
-      "people": 6,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 32.0,
-      "heat_source": false,
-      "note": "출근 — 여름 반팔, 착석 사무 작업"
+      "start": "08:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 30.0, "outdoor_humid": 72.0, "heat_source": false,
+      "note": "출근 전 — 방 이미 더워진 상태"
     },
     {
-      "start": "11:00",
-      "people": 6,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 34.0,
-      "heat_source": false,
-      "note": "오전 막판 — 기온 급상승"
+      "start": "08:30", "people": 2, "met": 1.2, "clo": 0.5,
+      "outdoor_temp": 31.0, "outdoor_humid": 70.0, "heat_source": false,
+      "note": "일찍 출근한 2명 — 반팔, ARRIVAL 트리거"
     },
     {
-      "start": "12:00",
-      "people": 2,
-      "met": 1.2,
-      "clo": 0.5,
-      "outdoor_temp": 35.0,
-      "heat_source": false,
-      "note": "정오 피크 — 대부분 외출, 최고 기온"
+      "start": "09:00", "people": 7, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 33.0, "outdoor_humid": 68.0, "heat_source": false,
+      "note": "출근 완료 — 7명, 반팔 착석 업무"
     },
     {
-      "start": "13:00",
-      "people": 6,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 35.0,
-      "heat_source": false,
-      "note": "오후 — 풀 인원 복귀, 폭염 지속"
+      "start": "09:30", "people": 8, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 33.5, "outdoor_humid": 67.0, "heat_source": false,
+      "note": "지각자 포함 풀 인원"
     },
     {
-      "start": "15:00",
-      "people": 6,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 33.0,
-      "heat_source": false,
-      "note": "오후 중반 — 기온 소폭 하강"
+      "start": "10:00", "people": 8, "met": 1.3, "clo": 0.5,
+      "outdoor_temp": 34.0, "outdoor_humid": 65.0, "heat_source": false,
+      "note": "오전 스탠딩 회의 — MET 상승"
     },
     {
-      "start": "17:00",
-      "people": 6,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 31.0,
-      "heat_source": false,
-      "note": "퇴근 임박 — 기온 하강 중"
+      "start": "10:30", "people": 8, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 34.5, "outdoor_humid": 65.0, "heat_source": false,
+      "note": "회의 후 자리 복귀 — 착석 업무"
     },
     {
-      "start": "18:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 29.0,
-      "heat_source": false,
-      "note": "퇴근 — 공실, AC 자동 꺼짐"
+      "start": "11:30", "people": 8, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 35.5, "outdoor_humid": 63.0, "heat_source": false,
+      "note": "점심 전 — 기온 계속 상승"
     },
     {
-      "start": "21:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 27.0,
-      "heat_source": false,
-      "note": "야간 — 기온 하강"
+      "start": "12:00", "people": 1, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 36.5, "outdoor_humid": 62.0, "heat_source": false,
+      "note": "점심 외출 — 1명만 잔류, LUNCH_BREAK 진입, AC OFF"
+    },
+    {
+      "start": "12:20", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 37.0, "outdoor_humid": 62.0, "heat_source": false,
+      "note": "완전 공실 — 37°C 폭염, AC OFF 상태에서 실내 급상승"
+    },
+    {
+      "start": "12:50", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 37.0, "outdoor_humid": 61.0, "heat_source": false,
+      "note": "공실 지속 — 실내온도 많이 올라간 상태"
+    },
+    {
+      "start": "13:00", "people": 5, "met": 1.2, "clo": 0.5,
+      "outdoor_temp": 36.5, "outdoor_humid": 61.0, "heat_source": false,
+      "note": "점심 복귀 시작 — ARRIVAL 트리거, 집중 냉방 재가동"
+    },
+    {
+      "start": "13:20", "people": 8, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 36.0, "outdoor_humid": 62.0, "heat_source": false,
+      "note": "전원 복귀 — 여전히 폭염, 강한 냉방 필요"
+    },
+    {
+      "start": "14:00", "people": 8, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 35.5, "outdoor_humid": 63.0, "heat_source": false,
+      "note": "오후 업무 — 실내 서서히 쾌적해지는 구간"
+    },
+    {
+      "start": "15:00", "people": 8, "met": 1.3, "clo": 0.5,
+      "outdoor_temp": 34.5, "outdoor_humid": 64.0, "heat_source": false,
+      "note": "오후 스탠딩 미팅 — MET 상승"
+    },
+    {
+      "start": "15:30", "people": 8, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 34.0, "outdoor_humid": 65.0, "heat_source": false,
+      "note": "미팅 후 복귀 — 외기 서서히 하강 시작"
+    },
+    {
+      "start": "17:00", "people": 6, "met": 1.2, "clo": 0.5,
+      "outdoor_temp": 32.5, "outdoor_humid": 66.0, "heat_source": false,
+      "note": "일부 조기 퇴근 — 인원 감소 시작"
+    },
+    {
+      "start": "17:30", "people": 4, "met": 1.4, "clo": 0.7,
+      "outdoor_temp": 31.5, "outdoor_humid": 67.0, "heat_source": false,
+      "note": "퇴근 준비 — 기립, 가방 챙김(MET↑), 겉옷 걸침(CLO↑) → PRE_DEPARTURE 트리거 기대"
+    },
+    {
+      "start": "17:50", "people": 2, "met": 1.5, "clo": 0.8,
+      "outdoor_temp": 31.0, "outdoor_humid": 68.0, "heat_source": false,
+      "note": "막바지 퇴근 — 2명 남음, 서있음, 인원 계속 감소"
+    },
+    {
+      "start": "18:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 30.0, "outdoor_humid": 69.0, "heat_source": false,
+      "note": "퇴근 완료 — EMPTY, AC OFF"
+    },
+    {
+      "start": "20:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 28.5, "outdoor_humid": 72.0, "heat_source": false,
+      "note": "야간 — 기온 서서히 하강"
+    },
+    {
+      "start": "23:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 27.0, "outdoor_humid": 76.0, "heat_source": false,
+      "note": "심야 — 열대야 지속"
     }
   ]
 }

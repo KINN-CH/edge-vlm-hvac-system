@@ -79,6 +79,7 @@ class VLMProcessor:
                     torch_dtype=self.dtype,
                     low_cpu_mem_usage=True,
                     attn_implementation="eager",
+                    local_files_only=True,
                 ).to(self.device)
             else:
                 # CUDA / CPU: device_map으로 직접 배치
@@ -87,8 +88,11 @@ class VLMProcessor:
                     torch_dtype=self.dtype,
                     low_cpu_mem_usage=True,
                     device_map={"": self.device},
+                    local_files_only=True,
                 )
-            self.processor = AutoProcessor.from_pretrained(self.model_id)
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_id, local_files_only=True
+            )
             print(f"✅ [VLM] {self.model_id} 로드 완료 "
                   f"(device={self.device}, dtype={self.dtype})")
         except Exception as e:

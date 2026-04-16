@@ -44,8 +44,8 @@ def window_badge(w: str) -> str:
 def scenario_html(csv_path: Path) -> str:
     df = pd.read_csv(csv_path)
 
-    # 1시간(60행) 간격으로 샘플링
-    hourly = df.iloc[::60].copy().reset_index(drop=True)
+    # 30분(30행) 간격으로 샘플링
+    hourly = df.iloc[::30].copy().reset_index(drop=True)
 
     name = csv_path.stem.replace("_", " ")
 
@@ -53,7 +53,8 @@ def scenario_html(csv_path: Path) -> str:
     total       = len(df)
     cool_pct    = int((df["hvac_mode"] == "cool").sum() * 100 / total)
     heat_pct    = int((df["hvac_mode"] == "heat").sum() * 100 / total)
-    comfort_pct = int((df["pmv"].abs() <= 0.5).sum() * 100 / total)
+    occupied    = df[df["people"] > 0]
+    comfort_pct = int((occupied["pmv"].abs() <= 0.5).sum() * 100 / len(occupied)) if len(occupied) > 0 else 0
     pmv_min     = df["pmv"].min()
     pmv_max     = df["pmv"].max()
     t_min       = df["indoor_temp"].min()
@@ -165,7 +166,7 @@ def build_report():
 </head>
 <body>
   <h1>🌡️ VLM HVAC 시나리오 분석 보고서</h1>
-  <p class="subtitle">시나리오별 24시간 시뮬레이션 결과 — 1시간 단위 요약</p>
+  <p class="subtitle">시나리오별 24시간 시뮬레이션 결과 — 30분 단위 요약</p>
   {cards}
 </body>
 </html>"""

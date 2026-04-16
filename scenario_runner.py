@@ -439,7 +439,8 @@ def run_scenario(scenario: dict, output_dir: Path) -> pd.DataFrame:
     total        = len(df)
     cool_min     = int((df["hvac_mode"] == "cool").sum())
     heat_min     = int((df["hvac_mode"] == "heat").sum())
-    comfort_pct  = int((df["pmv"].abs() <= 0.5).sum() * 100 / total)
+    occupied     = df[df["people"] > 0]
+    comfort_pct  = int((occupied["pmv"].abs() <= 0.5).sum() * 100 / len(occupied)) if len(occupied) > 0 else 0
 
     # 상태별 체류 시간
     state_counts = df["state"].value_counts()
