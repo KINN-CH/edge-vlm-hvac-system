@@ -1,94 +1,141 @@
 {
   "name": "주방 화구 사용 시나리오",
-  "description": "소규모 주방(15m²). 점심·저녁 조리 시 화구 복사열(TR +4°C 보정)이 PMV에 미치는 영향과 창문 환기 솔루션 발동 여부 검증. 낮 23°C → 저녁 18°C 외기 변화 포함.",
+  "description": "15m² 소규모 주방. 아침·점심·저녁 세 번의 조리 사이클. 화구 ON 시 복사열(TR +4°C) + 고MET(2.0~2.5) 복합으로 PMV 급등 → 창문 환기 권고 발동 검증. 조리 OFF 구간에서 빠른 PMV 회복 확인.",
   "room_size_m2": 15.0,
-  "initial_indoor_temp": 20.0,
-  "initial_indoor_humid": 55.0,
-  "outdoor": {
-    "temp": 20.0,
-    "humid": 60.0
-  },
+  "initial_indoor_temp": 18.0,
+  "initial_indoor_humid": 52.0,
+  "work_end_hour": 21,
+  "outdoor": { "temp": 18.0, "humid": 60.0 },
   "timeline": [
     {
-      "start": "00:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.7,
-      "outdoor_temp": 16.0,
-      "heat_source": false,
-      "note": "공실 야간 — 선선함"
+      "start": "00:00", "people": 0, "met": 1.0, "clo": 0.7,
+      "outdoor_temp": 14.0, "outdoor_humid": 65.0, "heat_source": false,
+      "note": "야간 공실"
     },
     {
-      "start": "06:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.7,
-      "outdoor_temp": 15.0,
-      "heat_source": false,
+      "start": "05:00", "people": 0, "met": 1.0, "clo": 0.7,
+      "outdoor_temp": 13.0, "outdoor_humid": 67.0, "heat_source": false,
       "note": "새벽 최저 기온"
     },
     {
-      "start": "10:00",
-      "people": 1,
-      "met": 1.2,
-      "clo": 0.5,
-      "outdoor_temp": 20.0,
-      "heat_source": false,
-      "note": "조리 준비 — 화구 미사용"
+      "start": "06:30", "people": 1, "met": 1.5, "clo": 0.6,
+      "outdoor_temp": 14.5, "outdoor_humid": 65.0, "heat_source": false,
+      "note": "아침 조리 준비 — 재료 세팅, 화구 미점화"
     },
     {
-      "start": "11:00",
-      "people": 2,
-      "met": 2.0,
-      "clo": 0.5,
-      "outdoor_temp": 22.0,
-      "heat_source": true,
-      "note": "점심 조리 — 화구 ON, 복사열 발생, 낮 최고 기온"
+      "start": "07:00", "people": 2, "met": 2.0, "clo": 0.5,
+      "outdoor_temp": 15.5, "outdoor_humid": 63.0, "heat_source": true,
+      "note": "아침 조리 시작 — 화구 ON, 이른 아침이라 외기 선선 → 창문 환기 가능"
     },
     {
-      "start": "13:30",
-      "people": 1,
-      "met": 1.2,
-      "clo": 0.5,
-      "outdoor_temp": 23.0,
-      "heat_source": false,
-      "note": "조리 종료 — 화구 OFF, 뒷정리"
+      "start": "07:30", "people": 2, "met": 2.5, "clo": 0.5,
+      "outdoor_temp": 16.0, "outdoor_humid": 62.0, "heat_source": true,
+      "note": "아침 조리 최고조 — 불 세게, MET↑"
     },
     {
-      "start": "15:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.5,
-      "outdoor_temp": 22.0,
-      "heat_source": false,
-      "note": "오후 공실"
+      "start": "08:30", "people": 1, "met": 1.5, "clo": 0.5,
+      "outdoor_temp": 17.5, "outdoor_humid": 61.0, "heat_source": false,
+      "note": "아침 서비스 종료 — 화구 OFF, 뒷정리"
     },
     {
-      "start": "17:00",
-      "people": 2,
-      "met": 2.0,
-      "clo": 0.5,
-      "outdoor_temp": 19.0,
-      "heat_source": true,
-      "note": "저녁 조리 — 화구 ON. 외기 냉각으로 창문 환기 솔루션 기대"
+      "start": "09:00", "people": 1, "met": 1.2, "clo": 0.5,
+      "outdoor_temp": 18.5, "outdoor_humid": 60.0, "heat_source": false,
+      "note": "청소 — 환기로 실내 온도 회복"
     },
     {
-      "start": "19:30",
-      "people": 1,
-      "met": 1.2,
-      "clo": 0.7,
-      "outdoor_temp": 17.0,
-      "heat_source": false,
-      "note": "저녁 조리 종료 — 외기 하강"
+      "start": "09:30", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 19.5, "outdoor_humid": 59.0, "heat_source": false,
+      "note": "아침 후 공실 — 환기 지속"
     },
     {
-      "start": "21:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 0.7,
-      "outdoor_temp": 15.0,
-      "heat_source": false,
-      "note": "마감"
+      "start": "10:30", "people": 1, "met": 1.5, "clo": 0.5,
+      "outdoor_temp": 21.0, "outdoor_humid": 58.0, "heat_source": false,
+      "note": "점심 준비 시작 — 재료 손질, 소스 준비"
+    },
+    {
+      "start": "11:00", "people": 3, "met": 2.0, "clo": 0.5,
+      "outdoor_temp": 22.5, "outdoor_humid": 57.0, "heat_source": true,
+      "note": "점심 조리 본격 시작 — 3명 모두 작업, 화구 풀가동"
+    },
+    {
+      "start": "11:30", "people": 3, "met": 2.5, "clo": 0.5,
+      "outdoor_temp": 23.5, "outdoor_humid": 56.0, "heat_source": true,
+      "note": "점심 조리 최고조 — 가장 더운 시간 + 화구 + 고활동, PMV 극값 예상"
+    },
+    {
+      "start": "12:00", "people": 3, "met": 2.5, "clo": 0.5,
+      "outdoor_temp": 24.0, "outdoor_humid": 55.0, "heat_source": true,
+      "note": "점심 서비스 — 최다 열부하 구간, 창문 환기 솔루션 발동 기대"
+    },
+    {
+      "start": "12:30", "people": 2, "met": 2.0, "clo": 0.5,
+      "outdoor_temp": 23.5, "outdoor_humid": 56.0, "heat_source": true,
+      "note": "점심 마무리 — 1명 퇴장, 화구 아직 ON"
+    },
+    {
+      "start": "13:00", "people": 2, "met": 1.5, "clo": 0.5,
+      "outdoor_temp": 23.0, "outdoor_humid": 57.0, "heat_source": false,
+      "note": "화구 OFF — 뒷정리 시작, PMV 회복 구간"
+    },
+    {
+      "start": "13:30", "people": 1, "met": 1.2, "clo": 0.5,
+      "outdoor_temp": 22.5, "outdoor_humid": 57.0, "heat_source": false,
+      "note": "청소 마무리 — 열기 가시는 중"
+    },
+    {
+      "start": "14:00", "people": 0, "met": 1.0, "clo": 0.5,
+      "outdoor_temp": 22.0, "outdoor_humid": 58.0, "heat_source": false,
+      "note": "점심 후 공실 — 환기로 실내 완전 회복"
+    },
+    {
+      "start": "15:30", "people": 1, "met": 1.5, "clo": 0.5,
+      "outdoor_temp": 20.5, "outdoor_humid": 59.0, "heat_source": false,
+      "note": "저녁 준비 시작 — 재료 준비"
+    },
+    {
+      "start": "16:00", "people": 2, "met": 1.8, "clo": 0.5,
+      "outdoor_temp": 19.5, "outdoor_humid": 60.0, "heat_source": false,
+      "note": "저녁 조리 준비 본격화 — 인원 증가"
+    },
+    {
+      "start": "16:30", "people": 3, "met": 2.0, "clo": 0.5,
+      "outdoor_temp": 18.5, "outdoor_humid": 61.0, "heat_source": true,
+      "note": "저녁 조리 시작 — 화구 ON, 외기는 낮보다 시원"
+    },
+    {
+      "start": "17:00", "people": 3, "met": 2.5, "clo": 0.5,
+      "outdoor_temp": 17.5, "outdoor_humid": 62.0, "heat_source": true,
+      "note": "저녁 조리 최고조 — 외기 시원해서 창문 환기 효과 좋은 조건"
+    },
+    {
+      "start": "17:30", "people": 4, "met": 2.5, "clo": 0.5,
+      "outdoor_temp": 17.0, "outdoor_humid": 63.0, "heat_source": true,
+      "note": "저녁 서비스 피크 — 인원 증가, 화구 최대"
+    },
+    {
+      "start": "18:30", "people": 3, "met": 2.0, "clo": 0.5,
+      "outdoor_temp": 16.5, "outdoor_humid": 64.0, "heat_source": true,
+      "note": "저녁 서비스 후반 — 화구 줄임"
+    },
+    {
+      "start": "19:00", "people": 2, "met": 1.5, "clo": 0.6,
+      "outdoor_temp": 15.5, "outdoor_humid": 65.0, "heat_source": false,
+      "note": "화구 OFF — 뒷정리, 외기 충분히 시원"
+    },
+    {
+      "start": "19:30", "people": 1, "met": 1.2, "clo": 0.6,
+      "outdoor_temp": 15.0, "outdoor_humid": 66.0, "heat_source": false,
+      "note": "마무리 청소 — 혼자 정리"
+    },
+    {
+      "start": "20:00", "people": 0, "met": 1.0, "clo": 0.6,
+      "outdoor_temp": 14.5, "outdoor_humid": 67.0, "heat_source": false,
+      "note": "마감 — EMPTY, 환기"
+    },
+    {
+      "start": "22:00", "people": 0, "met": 1.0, "clo": 0.7,
+      "outdoor_temp": 13.5, "outdoor_humid": 68.0, "heat_source": false,
+      "note": "야간"
     }
   ]
 }

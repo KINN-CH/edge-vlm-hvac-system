@@ -1,103 +1,136 @@
 {
   "name": "겨울철 사무실 시나리오",
-  "description": "한겨울 조건에서 사무실 하루 패턴. 새벽 -6°C → 정오 1°C → 저녁 -5°C 기온 일교차 포함. 오후에 아우터 탈의 행동 반영.",
+  "description": "한겨울(-8°C~2°C). 출근 시 두꺼운 코트 착용 → 실내 난방 후 탈의 → 점심 외출 → 복귀 → 퇴근 전 외투 재착용(PRE_DEPARTURE) 전 과정. 실내가 충분히 안 따뜻한 상태에서 사람들이 도착하는 극한 난방 시나리오.",
   "room_size_m2": 30.0,
-  "initial_indoor_temp": 10.0,
-  "initial_indoor_humid": 38.0,
-  "outdoor": {
-    "temp": -4.0,
-    "humid": 40.0
-  },
+  "initial_indoor_temp": 8.0,
+  "initial_indoor_humid": 32.0,
+  "work_end_hour": 18,
+  "outdoor": { "temp": -5.0, "humid": 40.0 },
   "timeline": [
     {
-      "start": "00:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": -6.0,
-      "heat_source": false,
-      "note": "한밤 — 최저 기온, 실내 급속 냉각"
+      "start": "00:00", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -7.0, "outdoor_humid": 42.0, "heat_source": false,
+      "note": "한밤 공실 — 혹한, 실내 급속 냉각"
     },
     {
-      "start": "04:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": -5.0,
-      "heat_source": false,
-      "note": "새벽 최저 기온 구간"
+      "start": "03:00", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -8.0, "outdoor_humid": 43.0, "heat_source": false,
+      "note": "새벽 최저 기온 — 실내도 바닥 수준"
     },
     {
-      "start": "07:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": -3.0,
-      "heat_source": false,
-      "note": "일출 — 서서히 기온 오름"
+      "start": "06:00", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -6.0, "outdoor_humid": 41.0, "heat_source": false,
+      "note": "일출 — 서서히 기온 오름, 여전히 매우 추움"
     },
     {
-      "start": "09:00",
-      "people": 5,
-      "met": 1.0,
-      "clo": 1.3,
-      "outdoor_temp": -2.0,
-      "heat_source": false,
-      "note": "출근 — 코트 착용(clo 1.3), 난방 가동 필요"
+      "start": "08:00", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -4.0, "outdoor_humid": 40.0, "heat_source": false,
+      "note": "출근 직전 — 실내 아직 차가운 상태"
     },
     {
-      "start": "11:00",
-      "people": 5,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": 0.0,
-      "heat_source": false,
-      "note": "오전 중반 — 실내 따뜻해지면서 아우터 탈의, 정오 접근으로 외기도 온화"
+      "start": "08:30", "people": 1, "met": 1.3, "clo": 1.5,
+      "outdoor_temp": -3.5, "outdoor_humid": 40.0, "heat_source": false,
+      "note": "얼리버드 출근 — 두꺼운 패딩 착용(clo 1.5), 손발 비비며 적응"
     },
     {
-      "start": "12:00",
-      "people": 1,
-      "met": 1.2,
-      "clo": 1.0,
-      "outdoor_temp": 1.0,
-      "heat_source": false,
-      "note": "점심 — 대부분 외출, 일 최고 기온"
+      "start": "09:00", "people": 6, "met": 1.2, "clo": 1.4,
+      "outdoor_temp": -3.0, "outdoor_humid": 39.0, "heat_source": false,
+      "note": "출근 — 두꺼운 코트 착용(clo 1.4), ARRIVAL 트리거, 강한 난방 필요"
     },
     {
-      "start": "13:00",
-      "people": 5,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": 0.0,
-      "heat_source": false,
-      "note": "오후 — 복귀, 긴소매 상태"
+      "start": "09:20", "people": 8, "met": 1.1, "clo": 1.4,
+      "outdoor_temp": -2.5, "outdoor_humid": 38.0, "heat_source": false,
+      "note": "인원 증가 — 코트 아직 입은 상태"
     },
     {
-      "start": "16:00",
-      "people": 5,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": -2.0,
-      "heat_source": false,
-      "note": "늦은 오후 — 기온 재하강"
+      "start": "09:50", "people": 8, "met": 1.0, "clo": 1.2,
+      "outdoor_temp": -2.0, "outdoor_humid": 38.0, "heat_source": false,
+      "note": "실내 따뜻해짐 — 두꺼운 코트는 벗고 자켓 착용"
     },
     {
-      "start": "18:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": -4.0,
-      "heat_source": false,
-      "note": "퇴근 — 공실, 난방 꺼짐, 기온 급락"
+      "start": "10:30", "people": 8, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -1.0, "outdoor_humid": 37.0, "heat_source": false,
+      "note": "완전 적응 — 일반 겨울 복장(clo 1.0), 착석 업무"
     },
     {
-      "start": "21:00",
-      "people": 0,
-      "met": 1.0,
-      "clo": 1.0,
-      "outdoor_temp": -6.0,
-      "heat_source": false,
-      "note": "야간 — 최저 기온 복귀"
+      "start": "11:00", "people": 8, "met": 1.3, "clo": 1.0,
+      "outdoor_temp": 0.0, "outdoor_humid": 36.0, "heat_source": false,
+      "note": "오전 스탠딩 미팅"
+    },
+    {
+      "start": "11:30", "people": 8, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": 0.5, "outdoor_humid": 36.0, "heat_source": false,
+      "note": "미팅 후 복귀 — 일 최고기온 접근"
+    },
+    {
+      "start": "12:00", "people": 1, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": 1.0, "outdoor_humid": 35.0, "heat_source": false,
+      "note": "점심 외출 — 1명 잔류, LUNCH_BREAK 진입, AC OFF"
+    },
+    {
+      "start": "12:15", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": 1.5, "outdoor_humid": 35.0, "heat_source": false,
+      "note": "완전 공실 — 난방 OFF, 실내 서서히 냉각"
+    },
+    {
+      "start": "12:50", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": 2.0, "outdoor_humid": 34.0, "heat_source": false,
+      "note": "공실 지속 — 일 최고기온이지만 여전히 영상 2°C"
+    },
+    {
+      "start": "13:00", "people": 5, "met": 1.2, "clo": 1.2,
+      "outdoor_temp": 1.5, "outdoor_humid": 35.0, "heat_source": false,
+      "note": "점심 복귀 — 외투 입고 돌아옴, ARRIVAL 트리거, 집중 난방 재가동"
+    },
+    {
+      "start": "13:20", "people": 8, "met": 1.0, "clo": 1.1,
+      "outdoor_temp": 1.0, "outdoor_humid": 35.0, "heat_source": false,
+      "note": "전원 복귀 — 외투 서서히 벗는 중"
+    },
+    {
+      "start": "14:00", "people": 8, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": 0.5, "outdoor_humid": 36.0, "heat_source": false,
+      "note": "오후 업무 — 안정 상태, 착석"
+    },
+    {
+      "start": "15:30", "people": 8, "met": 1.3, "clo": 1.0,
+      "outdoor_temp": -0.5, "outdoor_humid": 37.0, "heat_source": false,
+      "note": "오후 미팅 — MET↑, 외기 재하강"
+    },
+    {
+      "start": "16:00", "people": 8, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -1.5, "outdoor_humid": 38.0, "heat_source": false,
+      "note": "미팅 종료 — 외기 급격히 떨어짐"
+    },
+    {
+      "start": "17:00", "people": 6, "met": 1.2, "clo": 1.0,
+      "outdoor_temp": -2.5, "outdoor_humid": 39.0, "heat_source": false,
+      "note": "일부 조기 퇴근 — 인원 감소"
+    },
+    {
+      "start": "17:30", "people": 4, "met": 1.4, "clo": 1.3,
+      "outdoor_temp": -3.5, "outdoor_humid": 40.0, "heat_source": false,
+      "note": "퇴근 준비 — 외투 입기 시작(clo↑), 기립(MET↑), 인원 감소 → PRE_DEPARTURE 트리거"
+    },
+    {
+      "start": "17:50", "people": 2, "met": 1.5, "clo": 1.5,
+      "outdoor_temp": -4.0, "outdoor_humid": 40.0, "heat_source": false,
+      "note": "막바지 — 두꺼운 외투 착용, 서서 마무리"
+    },
+    {
+      "start": "18:00", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -4.5, "outdoor_humid": 41.0, "heat_source": false,
+      "note": "퇴근 완료 — EMPTY, 난방 OFF"
+    },
+    {
+      "start": "20:00", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -6.0, "outdoor_humid": 42.0, "heat_source": false,
+      "note": "야간 — 기온 급락, 실내 빠르게 식음"
+    },
+    {
+      "start": "23:00", "people": 0, "met": 1.0, "clo": 1.0,
+      "outdoor_temp": -7.5, "outdoor_humid": 43.0, "heat_source": false,
+      "note": "심야 — 최저기온 접근"
     }
   ]
 }
