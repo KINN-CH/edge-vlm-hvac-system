@@ -112,9 +112,9 @@ style: |
 
 <!-- _class: title -->
 
-# 엣지 VLM·IoT 융합 기반<br>완전 오프라인 지능형 공조 제어 시스템
+# 엣지 VLM·IoT 융합 기반<br>온디바이스 AI 추론 지능형 공조 제어 시스템
 
-<p class="en">Edge VLM-Driven Fully-Offline Intelligent HVAC Control System</p>
+<p class="en">Edge VLM-Driven On-Device AI Intelligent HVAC Control System</p>
 
 <div class="team">
 <span class="tag">VLM / AI 추론</span> 김준경 &nbsp;·&nbsp;
@@ -166,7 +166,7 @@ style: |
 <div class="card card-green" style="margin-top:14px;">
 
 ### 제약 조건
-- 완전 오프라인 — 클라우드 **Zero**
+- AI 추론 온디바이스 — 카메라 영상 외부 전송 **Zero**
 - NVIDIA Jetson Orin Nano Super (8GB)
 - 기존 공조기 **레트로핏** (교체 없이 부착)
 - 실시간 제어 (30초 분석 주기)
@@ -206,7 +206,7 @@ Layer 3  제어 (Control)
 <div class="three">
 <div class="card center"><div class="num">3초</div>YOLO 인원 감지 주기</div>
 <div class="card center"><div class="num">30초</div>VLM 맥락 분석 주기</div>
-<div class="card center"><div class="num">8GB</div>Jetson UMA — 완전 오프라인</div>
+<div class="card center"><div class="num">8GB</div>Jetson UMA — AI 추론 온디바이스</div>
 </div>
 
 ---
@@ -272,7 +272,7 @@ prompt = """Analyze the room. Return JSON:
 result = vlm.generate(frame, prompt)
 ```
 
-- **완전 오프라인** — float16(MPS/CUDA) / float32(CPU)
+- **온디바이스 추론** — float16(MPS/CUDA) / float32(CPU)
 - MPS → CUDA → CPU 자동 선택
 - VLM 실패 시 → **계절별 CLO fallback** 자동 적용
 
@@ -656,7 +656,7 @@ def get_clicked(x, y):
 | 맥락 | 없음 | 5단계 상태 머신 (점심·퇴근·계절) |
 | 개인화 | 없음 | 추워요·더워요 + MLP 학습 (예정) |
 | 예측 | 사후 반응 | LSTM 선제 대응 (예정) |
-| 프라이버시 | 클라우드 전송 | **완전 오프라인** |
+| 프라이버시 | 클라우드 전송 | **영상 온디바이스 처리** |
 | 도입 | 전체 교체 | **레트로핏** |
 
 <br>
